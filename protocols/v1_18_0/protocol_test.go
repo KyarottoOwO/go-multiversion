@@ -1,4 +1,4 @@
-package v1_18_10
+package v1_18_0
 
 import (
 	"bytes"
@@ -7,14 +7,17 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"os/exec"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/google/uuid"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	v486data "github.com/shawtymarco/go-multiversion/data/v486"
+	v475data "github.com/shawtymarco/go-multiversion/data/v475"
 	"github.com/shawtymarco/go-multiversion/mapping"
 )
 
@@ -25,19 +28,19 @@ type oracleFixture struct {
 }
 
 func TestHistoricalZeroValuePacketPools(t *testing.T) {
-	data, err := os.ReadFile("testdata/zero_pool.json")
+	data, err := os.ReadFile("testdata/zero_pool_v475.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var oracle struct {
-		Packets map[uint32]string `json:"packets"`
+		Server map[uint32]string `json:"server"`
 	}
 	if err := json.Unmarshal(data, &oracle); err != nil {
 		t.Fatal(err)
 	}
 	p := New().(*Protocol)
 	server, client := p.Packets(false), p.Packets(true)
-	for id, encoded := range oracle.Packets {
+	for id, encoded := range oracle.Server {
 		if id == packet.IDStartGame || id == packet.IDBiomeDefinitionList || id == packet.IDResourcePackClientResponse {
 			continue
 		}
@@ -80,12 +83,12 @@ func TestHistoricalPacketOracles(t *testing.T) {
 		"player_action":            {packet: &packet.PlayerAction{EntityRuntimeID: 9, ActionType: protocol.PlayerActionStartBreak, BlockPosition: protocol.BlockPos{3, 70, -4}, ResultPosition: protocol.BlockPos{3, 70, -4}, BlockFace: 2}, listener: true, hex: "090006460704"},
 		"request_chunk_radius":     {packet: &packet.RequestChunkRadius{ChunkRadius: 12, MaxChunkRadius: 12}, listener: true, hex: "18"},
 		"level_chunk":              {packet: &packet.LevelChunk{Position: protocol.ChunkPos{-2, 5}, Dimension: packet.DimensionOverworld, SubChunkCount: 2, CacheEnabled: true, BlobHashes: []uint64{11, 12, 13}, RawPayload: []byte{1, 2, 3}}, hex: "030a0201030b000000000000000c000000000000000d0000000000000003010203"},
-		"sub_chunk_request":        {packet: &packet.SubChunkRequest{Dimension: 0, Position: protocol.SubChunkPos{-2, 3, 4}, Offsets: []protocol.SubChunkOffset{{-1, 0, 1}, {2, -3, 4}}}, listener: true, hex: "0003060802000000ff000102fd04"},
-		"sub_chunk":                {packet: &packet.SubChunk{CacheEnabled: true, Dimension: 0, Position: protocol.SubChunkPos{1, -2, 3}, SubChunkEntries: []protocol.SubChunkEntry{{Offset: protocol.SubChunkOffset{-1, 2, 3}, Result: protocol.SubChunkResultSuccess, RawPayload: protocol.Option([]byte{9, 8}), HeightMapType: protocol.HeightMapDataNone, BlobHash: protocol.Option(uint64(77))}}}, hex: "010002030601000000ff020301020908004d00000000000000"},
+		"sub_chunk_request":        {packet: &packet.SubChunkRequest{Dimension: 0, Position: protocol.SubChunkPos{-2, 3, 4}, Offsets: []protocol.SubChunkOffset{{-1, 0, 1}, {2, -3, 4}}}, listener: true, hex: "0005060a"},
+		"sub_chunk":                {packet: &packet.SubChunk{CacheEnabled: true, Dimension: 0, Position: protocol.SubChunkPos{1, -2, 3}, SubChunkEntries: []protocol.SubChunkEntry{{Offset: protocol.SubChunkOffset{-1, 2, 3}, Result: protocol.SubChunkResultSuccess, RawPayload: protocol.Option([]byte{9, 8}), HeightMapType: protocol.HeightMapDataNone, BlobHash: protocol.Option(uint64(77))}}}, hex: "000203060209080200014d00000000000000"},
 		"player_auth_input":        {packet: &packet.PlayerAuthInput{Pitch: 1, Yaw: 2, Position: mgl32.Vec3{3, 4, 5}, MoveVector: mgl32.Vec2{0.25, -0.5}, HeadYaw: 6, InputData: inputFlags, InputMode: packet.InputModeMouse, PlayMode: packet.PlayModeNormal, Tick: 99, Delta: mgl32.Vec3{0.1, 0.2, 0.3}}, listener: true, hex: "0000803f0000004000004040000080400000a0400000803e000000bf0000c04001010063cdcccc3dcdcc4c3e9a99993e"},
 		"inventory_content":        {packet: &packet.InventoryContent{WindowID: 3, Content: []protocol.ItemInstance{{StackNetworkID: 4, Stack: protocol.ItemStack{ItemType: protocol.ItemType{NetworkID: 1, MetadataValue: 2}, BlockRuntimeID: 3, Count: 5}}}}, hex: "0301020500020108060a00000000000000000000"},
 		"creative_content":         {packet: &packet.CreativeContent{Items: []protocol.CreativeItem{{CreativeItemNetworkID: 17, Item: protocol.ItemStack{ItemType: protocol.ItemType{NetworkID: 1}, Count: 1}}}}, hex: "011102010000000a00000000000000000000"},
-		"item_stack_request":       {packet: &packet.ItemStackRequest{Requests: []protocol.ItemStackRequest{{RequestID: 8, Actions: []protocol.StackRequestAction{&protocol.CraftCreativeStackRequestAction{CreativeItemNetworkID: 17, NumberOfCrafts: 1}}, FilterStrings: []string{"name"}}}}, listener: true, hex: "0110010e1101046e616d65"},
+		"item_stack_request":       {packet: &packet.ItemStackRequest{Requests: []protocol.ItemStackRequest{{RequestID: 8, Actions: []protocol.StackRequestAction{&protocol.CraftCreativeStackRequestAction{CreativeItemNetworkID: 17, NumberOfCrafts: 1}}, FilterStrings: []string{"name"}}}}, listener: true, hex: "0110010c1101046e616d65"},
 		"item_stack_response":      {packet: &packet.ItemStackResponse{Responses: []protocol.ItemStackResponse{{Status: protocol.ItemStackResponseStatusOK, RequestID: 8, ContainerInfo: []protocol.StackResponseContainerInfo{{Container: protocol.FullContainerName{ContainerID: 28}, SlotInfo: []protocol.StackResponseSlotInfo{{Slot: 1, HotbarSlot: 1, Count: 2, StackNetworkID: 4, CustomName: "item", DurabilityCorrection: 3}}}}}}}, hex: "010010011b0101010208046974656d06"},
 		"resource_packs_info":      {packet: &packet.ResourcePacksInfo{TexturePackRequired: true, TexturePacks: []protocol.TexturePackInfo{{UUID: identifier, Version: "1.0.0", Size: 9, ContentKey: "k", SubPackName: "s", ContentIdentity: "c", RTXEnabled: true}}}, hex: "010000000001002431323365343536372d653839622d313264332d613435362d34323636313431373430303005312e302e300900000000000000016b017301630001"},
 		"resource_pack_stack":      {packet: &packet.ResourcePackStack{TexturePackRequired: true, TexturePacks: []protocol.StackResourcePack{{UUID: identifier.String(), Version: "1.0.0", SubPackName: "s"}}, BaseGameVersion: "1.18.12", Experiments: []protocol.ExperimentData{{Name: "test", Enabled: true}}, ExperimentsPreviouslyToggled: true}, hex: "0100012431323365343536372d653839622d313264332d613435362d34323636313431373430303005312e302e30017307312e31382e31320100000004746573740101"},
@@ -128,6 +131,20 @@ func TestHistoricalPacketOracles(t *testing.T) {
 			if !bytes.Equal(roundTrip, want) {
 				t.Fatalf("historical round trip differs:\n got %x\nwant %x", roundTrip, want)
 			}
+			if oracle := os.Getenv("V475_WIRE_ORACLE"); oracle != "" && name != "text_object_announcement" {
+				direction := "server"
+				if fixture.listener {
+					direction = "client"
+				}
+				command := exec.Command(oracle, direction, strconv.FormatUint(uint64(targetPacketID(fixture.packet.ID())), 10), hex.EncodeToString(got))
+				output, err := command.CombinedOutput()
+				if err != nil {
+					t.Fatalf("historical oracle: %v: %s", err, strings.TrimSpace(string(output)))
+				}
+				if strings.TrimSpace(string(output)) != hex.EncodeToString(got) {
+					t.Fatalf("historical oracle changed bytes: got %s, want %x", output, got)
+				}
+			}
 		})
 	}
 }
@@ -136,7 +153,7 @@ func marshalOraclePacket(t *testing.T, p *Protocol, pk packet.Packet) []byte {
 	t.Helper()
 	marshal, ok := packetMarshals[pk.ID()]
 	if !ok {
-		t.Fatalf("packet %d has no protocol-486 Marshal", pk.ID())
+		t.Fatalf("packet %d has no protocol-475 Marshal", pk.ID())
 	}
 	var buffer bytes.Buffer
 	translated(pk, marshal).Marshal(p.NewWriter(&buffer, -1))
@@ -167,7 +184,7 @@ func TestHistoricalStartGameOracle(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := New().(*Protocol)
-	p.runtime = &runtimeData{items: items, biomes: v486data.BiomeDefinitions()}
+	p.runtime = &runtimeData{items: items, biomes: v475data.BiomeDefinitions()}
 	pk := &packet.StartGame{
 		EntityUniqueID: -5, EntityRuntimeID: 10, PlayerGameMode: 1,
 		PlayerPosition: mgl32.Vec3{1, 2, 3}, Pitch: 4, Yaw: 5, WorldSeed: 6,
@@ -208,8 +225,8 @@ func TestHistoricalStartGameOracle(t *testing.T) {
 
 func TestHistoricalBiomeDefinitionPacket(t *testing.T) {
 	p := New().(*Protocol)
-	p.runtime = &runtimeData{biomes: v486data.BiomeDefinitions()}
-	want := v486data.BiomeDefinitions()
+	p.runtime = &runtimeData{biomes: v475data.BiomeDefinitions()}
+	want := v475data.BiomeDefinitions()
 	if got := marshalOraclePacket(t, p, &packet.BiomeDefinitionList{}); !bytes.Equal(got, want) {
 		t.Fatalf("biome definition bytes differ: got %x, want %x", got, want)
 	}
@@ -329,6 +346,6 @@ func TestPreSpawnPackets(t *testing.T) {
 
 func TestBiomePaletteReuseDisabled(t *testing.T) {
 	if (Protocol{}).ReuseBiomePalettes() {
-		t.Fatal("protocol 486 enabled biome palette reuse")
+		t.Fatal("protocol 475 enabled biome palette reuse")
 	}
 }
