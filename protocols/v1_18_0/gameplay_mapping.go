@@ -156,7 +156,9 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		return []packet.Packet{&cloned}
 	case *packet.LevelEvent:
 		cloned := *current
-		mapLevelEventData(&cloned, items, p.runtime.blocks, toTarget)
+		if !mapLevelEventData(&cloned, items, p.runtime.blocks, toTarget) {
+			return nil
+		}
 		return []packet.Packet{&cloned}
 	case *packet.ActorEvent:
 		cloned := *current

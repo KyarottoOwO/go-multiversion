@@ -5,6 +5,7 @@ import (
 
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetconv"
 	"github.com/shawtymarco/go-multiversion/mapping"
 )
 
@@ -101,7 +102,11 @@ func mapBlockChangeEntries(entries []protocol.BlockChangeEntry, blocks *mapping.
 }
 
 func mapLevelEventData(pk *packet.LevelEvent, items *mapping.ItemMapper, blocks *mapping.BlockMapper, direction mappingDirection) bool {
-	switch pk.EventType {
+	eventType, ok := packetconv.MapPre12060ParticleEventType(pk, direction == toTarget)
+	if !ok {
+		return false
+	}
+	switch eventType {
 	case packet.LevelEventParticlesDestroyBlock:
 		mapped, ok := mapBlockRuntimeID(uint32(pk.EventData), blocks, direction)
 		pk.EventData = int32(mapped)
@@ -124,6 +129,10 @@ func mapLevelEventData(pk *packet.LevelEvent, items *mapping.ItemMapper, blocks 
 			mapped, ok = items.TargetToNative(itemID)
 		}
 		pk.EventData = int32(uint32(mapped)<<16 | meta)
+		return ok
+	case packet.LevelEventParticleLegacyEvent | 21:
+		mapped, ok := mapBlockRuntimeID(uint32(pk.EventData), blocks, direction)
+		pk.EventData = int32(mapped)
 		return ok
 	default:
 		return true
