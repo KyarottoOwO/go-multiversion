@@ -86,6 +86,50 @@ func TestLegacyBlockSoundUsesTargetRuntimeID(t *testing.T) {
 	}
 }
 
+func TestLegacyTerrainParticleMapsTypeAndBlockRuntimeID(t *testing.T) {
+	blocks, items := legacyWoolTestMappers(t)
+	p := Protocol{runtime: &runtimeData{blocks: blocks, items: items}}
+	targetRuntimeID, valid, exact := blocks.MapNative(1)
+	if !valid || !exact {
+		t.Fatal("lime wool block did not map exactly")
+	}
+	original := &packet.LevelEvent{EventType: packet.LevelEventParticleLegacyEvent | 21, EventData: 1}
+	target := p.convertGameplayFromLatest(original, nil)[0].(*packet.LevelEvent)
+	if original.EventType != packet.LevelEventParticleLegacyEvent|21 || original.EventData != 1 {
+		t.Fatalf("native input mutated = %#v", original)
+	}
+	if target.EventType != packet.LevelEventParticleLegacyEvent|20 || target.EventData != int32(targetRuntimeID) {
+		t.Fatalf("target terrain particle = %#v", target)
+	}
+	latest := p.convertGameplayToLatest(target, nil)[0].(*packet.LevelEvent)
+	if latest.EventType != packet.LevelEventParticleLegacyEvent|21 || latest.EventData != 1 {
+		t.Fatalf("round-trip terrain particle = %#v", latest)
+	}
+}
+
+func TestLegacyItemBreakParticleMapsItemRuntimeID(t *testing.T) {
+	items, err := mapping.NewItemMapper(
+		[]protocol.ItemEntry{{Name: "minecraft:stone", RuntimeID: 501}},
+		map[string]mapping.TargetItem{"minecraft:stone": {RuntimeID: 35}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := Protocol{runtime: &runtimeData{items: items}}
+	original := &packet.LevelEvent{EventType: packet.LevelEventParticleLegacyEvent | 14, EventData: int32(uint32(501)<<16 | 3)}
+	target := p.convertGameplayFromLatest(original, nil)[0].(*packet.LevelEvent)
+	if original.EventData != int32(uint32(501)<<16|3) {
+		t.Fatalf("native input mutated = %#v", original)
+	}
+	if target.EventType != packet.LevelEventParticleLegacyEvent|14 || target.EventData != int32(uint32(35)<<16|3) {
+		t.Fatalf("target item particle = %#v", target)
+	}
+	latest := p.convertGameplayToLatest(target, nil)[0].(*packet.LevelEvent)
+	if latest.EventType != packet.LevelEventParticleLegacyEvent|14 || latest.EventData != original.EventData {
+		t.Fatalf("round-trip item particle = %#v", latest)
+	}
+}
+
 func legacyWoolTestMappers(t *testing.T) (*mapping.BlockMapper, *mapping.ItemMapper) {
 	t.Helper()
 	historical, err := v475data.BlockStates()
