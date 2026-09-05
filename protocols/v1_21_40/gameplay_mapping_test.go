@@ -135,6 +135,42 @@ func TestGameplayBlockSoundMappingPreservesInputAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestTerrainParticleMapsBlockRuntimeID(t *testing.T) {
+	p := testMappedProtocol(t)
+	targetRuntimeID, exact := p.runtime.blocks.NativeToTarget(1)
+	if !exact {
+		t.Fatal("stone mapping unexpectedly used fallback")
+	}
+	original := &packet.LevelEvent{EventType: packet.LevelEventParticleLegacyEvent | 21, EventData: 1}
+	target := p.convertGameplayFromLatest(original, nil)[0].(*packet.LevelEvent)
+	if original.EventData != 1 || original.EventType != packet.LevelEventParticleLegacyEvent|21 {
+		t.Fatalf("native input mutated = %#v", original)
+	}
+	if target.EventType != packet.LevelEventParticleLegacyEvent|21 || target.EventData != int32(targetRuntimeID) {
+		t.Fatalf("target terrain particle = %#v", target)
+	}
+	latest := p.convertGameplayToLatest(target, nil)[0].(*packet.LevelEvent)
+	if latest.EventType != packet.LevelEventParticleLegacyEvent|21 || latest.EventData != 1 {
+		t.Fatalf("round-trip terrain particle = %#v", latest)
+	}
+}
+
+func TestItemBreakParticleMapsItemRuntimeID(t *testing.T) {
+	p := testMappedProtocol(t)
+	original := &packet.LevelEvent{EventType: packet.LevelEventParticleLegacyEvent | 14, EventData: int32(uint32(2)<<16 | 3)}
+	target := p.convertGameplayFromLatest(original, nil)[0].(*packet.LevelEvent)
+	if original.EventData != int32(uint32(2)<<16|3) {
+		t.Fatalf("native input mutated = %#v", original)
+	}
+	if target.EventData != int32(uint32(7)<<16|3) {
+		t.Fatalf("target item particle data = %#x", target.EventData)
+	}
+	latest := p.convertGameplayToLatest(target, nil)[0].(*packet.LevelEvent)
+	if latest.EventData != original.EventData {
+		t.Fatalf("round-trip item particle data = %#x", latest.EventData)
+	}
+}
+
 func TestCraftingDataFiltersUnmappedOutputs(t *testing.T) {
 	p := testMappedProtocol(t)
 	input := &packet.CraftingData{ShapelessRecipes: []protocol.ShapelessRecipe{

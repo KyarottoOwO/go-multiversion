@@ -125,6 +125,10 @@ func mapLevelEventData(pk *packet.LevelEvent, items *mapping.ItemMapper, blocks 
 		}
 		pk.EventData = int32(uint32(mapped)<<16 | meta)
 		return ok
+	case packet.LevelEventParticleLegacyEvent | 21:
+		mapped, ok := mapBlockRuntimeID(uint32(pk.EventData), blocks, direction)
+		pk.EventData = int32(mapped)
+		return ok
 	default:
 		return true
 	}
