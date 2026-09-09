@@ -25,7 +25,7 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		if err != nil {
 			return nil
 		}
-		return []packet.Packet{&packet.ItemRegistry{Items: items.TargetEntries()}}
+		return []packet.Packet{&packet.ItemRegistry{Items: items.RegistryEntries(registry.Items, ID)}}
 	}
 	items := p.runtime.currentItemMapper()
 	if items == nil && conn != nil {
