@@ -3,6 +3,7 @@ package v1_18_0
 import "github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 
 var packetMarshals = map[uint32]packetMarshal{
+	packet.IDItemRegistry:                      marshalItemComponents,
 	packet.IDActorEvent:                        marshalActorEvent,
 	packet.IDAddActor:                          marshalAddActor,
 	packet.IDAddPlayer:                         marshalAddPlayer,
@@ -77,6 +78,4 @@ var packetMarshals = map[uint32]packetMarshal{
 
 const maxLegacyPacketID uint32 = 175
 
-var droppedPacketIDs = map[uint32]struct{}{
-	packet.IDItemRegistry: {},
-}
+var droppedPacketIDs = map[uint32]struct{}{}

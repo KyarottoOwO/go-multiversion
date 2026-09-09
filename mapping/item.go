@@ -33,6 +33,7 @@ type TargetItemFallback struct {
 
 // ItemMapper maps current and target item network IDs by semantic identifier.
 type ItemMapper struct {
+	customNames          map[string]struct{}
 	nativeToTarget       map[int32]int32
 	targetToNative       map[int32]int32
 	nativeByName         map[string]int32
@@ -69,6 +70,10 @@ func NewItemMapperAllowingTargetOnly(native []protocol.ItemEntry, target map[str
 }
 
 func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string, allowTargetOnly bool) (*ItemMapper, error) {
+	target, customNames, err := appendCustomItemDefinitions(native, target)
+	if err != nil {
+		return nil, err
+	}
 	if resolve == nil {
 		resolve = func(name string) string { return name }
 	}
@@ -118,7 +123,7 @@ func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]Ta
 			RuntimeID:      int16(entry.RuntimeID),
 			ComponentBased: entry.ComponentBased,
 			Version:        entry.Version,
-			Data:           cloneProperties(entry.Data),
+			Data:           cloneItemProperties(entry.Data),
 		})
 	}
 	sort.Slice(targetEntries, func(i, j int) bool { return targetEntries[i].RuntimeID < targetEntries[j].RuntimeID })
@@ -164,6 +169,7 @@ func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]Ta
 	}
 
 	return &ItemMapper{
+		customNames:          customNames,
 		nativeToTarget:       nativeToTarget,
 		targetToNative:       targetToNative,
 		nativeByName:         nativeByName,
@@ -289,7 +295,7 @@ func (m *ItemMapper) TargetEntries() []protocol.ItemEntry {
 	entries := make([]protocol.ItemEntry, len(m.targetEntries))
 	for index, entry := range m.targetEntries {
 		entries[index] = entry
-		entries[index].Data = cloneProperties(entry.Data)
+		entries[index].Data = cloneItemProperties(entry.Data)
 	}
 	return entries
 }

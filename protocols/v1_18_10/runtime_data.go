@@ -69,7 +69,7 @@ func (data *runtimeData) itemMapper(native []protocol.ItemEntry) (*mapping.ItemM
 	items := data.items
 	data.itemsMu.RUnlock()
 	if items != nil {
-		return items, nil
+		return items, items.ValidateNativeEntries(native)
 	}
 	if len(native) == 0 {
 		return nil, fmt.Errorf("native item registry is empty")

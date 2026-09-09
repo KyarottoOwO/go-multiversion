@@ -25,7 +25,7 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		if err != nil {
 			return nil
 		}
-		return []packet.Packet{&packet.ItemRegistry{Items: items.TargetEntries()}}
+		return []packet.Packet{&packet.ItemRegistry{Items: items.RegistryEntries(registry.Items, ID)}}
 	}
 	items := p.runtime.currentItemMapper()
 	if items == nil && conn != nil {
@@ -41,6 +41,9 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		}
 		cloned.GameVersion, cloned.BaseGameVersion = version, version
 		cloned.GameRules = targetGameRules(current.GameRules)
+		if items.HasCustomItems() {
+			cloned.Experiments = items.CustomItemExperiments()
+		}
 		return []packet.Packet{&cloned}
 	case *packet.ResourcePackStack:
 		cloned := *current
@@ -52,7 +55,7 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		cloned.TexturePacks = targetTexturePacks(current.TexturePacks)
 		// The native stack enables the current-only cameras experiment. The
 		// protocol 475 server stack predates it and sent no experiments here.
-		cloned.Experiments = nil
+		cloned.Experiments = items.CustomItemExperiments()
 		cloned.ExperimentsPreviouslyToggled = false
 		return []packet.Packet{&cloned}
 	case *packet.ModalFormRequest:
