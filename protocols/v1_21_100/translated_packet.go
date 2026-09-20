@@ -4,6 +4,8 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetconv"
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 )
 
 type packetMarshal func(*wireIO, packet.Packet)
@@ -62,7 +64,7 @@ func downgradePacket(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
 			)
 		}
 	case *packet.ClientboundUpdateSoundData:
-		if _, ok := current.Stop.Value(); !ok {
+		if !packetconv.StopOnlySoundUpdate(current) {
 			return nil
 		}
 	case *packet.StartGame:
@@ -76,7 +78,7 @@ func downgradePacket(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
 	}
 	marshal, ok := packetMarshals[pk.ID()]
 	if !ok {
-		return []packet.Packet{pk}
+		return []packet.Packet{v1_26_45.WrapWirePacket(pk)}
 	}
 	return []packet.Packet{translated(pk, marshal)}
 }

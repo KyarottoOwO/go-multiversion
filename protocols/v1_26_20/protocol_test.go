@@ -3,6 +3,7 @@ package v1_26_20
 import (
 	"bytes"
 	"encoding/hex"
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 	"image/color"
 	"os"
 	"os/exec"
@@ -136,7 +137,7 @@ func wireFixtures() []packetFixture {
 			return &packet.ServerBoundPackSettingChange{PackID: uuid.MustParse("12345678-1234-1234-1234-123456789abc"), PackSetting: protocol.PackSetting{Name: "setting", Value: true}}
 		}},
 		{name: "full/dimension_data", new: func() packet.Packet {
-			return &packet.DimensionData{Definitions: []protocol.DimensionDefinition{{Name: "dimension", Range: [2]int32{320, -64}, Generator: protocol.GeneratorOverworld, DimensionType: 1000}}}
+			return &packet.DimensionData{Definitions: []protocol.DimensionDefinition{{Name: "dimension", MinimumY: -64, HeightRange: 383, Generator: protocol.GeneratorOverworld, DimensionType: 1000}}}
 		}},
 		{name: "full/add_actor_shared_io", new: func() packet.Packet {
 			return &packet.AddActor{EntityUniqueID: 1, EntityRuntimeID: 2, EntityType: "minecraft:pig", EntityMetadata: protocol.EntityMetadata{1: byte(1), 2: int32(2)}}
@@ -206,7 +207,7 @@ func wireFixtures() []packetFixture {
 		}},
 		{name: "full/item_stack_response", new: func() packet.Packet {
 			return &packet.ItemStackResponse{Responses: []protocol.ItemStackResponse{{Status: protocol.ItemStackResponseStatusOK, RequestID: 1,
-				ContainerInfo: []protocol.StackResponseContainerInfo{{Container: protocol.FullContainerName{ContainerID: 1}, SlotInfo: []protocol.StackResponseSlotInfo{{Slot: 2, HotbarSlot: 2, Count: 1, StackNetworkID: 3, CustomName: "x", FilteredCustomName: "x"}}}},
+				ContainerInfo: []protocol.StackResponseContainerInfo{{Container: protocol.FullContainerName{ContainerID: 1}, SlotInfo: []protocol.StackResponseSlotInfo{{Slot: 2, HotbarSlot: 2, Count: 1, StackNetworkID: 3, CustomName: "x", FilteredCustomName: protocol.Option("x")}}}},
 			}}}
 		}},
 		{name: "full/level_chunk", new: func() packet.Packet {
@@ -254,7 +255,7 @@ func wireFixtures() []packetFixture {
 			}
 		}},
 		{name: "full/sub_chunk", new: func() packet.Packet {
-			height := make([]int8, 256)
+			height := protocol.HeightMap{}
 			return &packet.SubChunk{CacheEnabled: false, Position: protocol.SubChunkPos{1, 2, 3}, SubChunkEntries: []protocol.SubChunkEntry{{
 				Offset: protocol.SubChunkOffset{1, -1, 2}, Result: protocol.SubChunkResultSuccess, RawPayload: protocol.Option([]byte{1, 2}),
 				HeightMapType: protocol.HeightMapDataHasData, HeightMapData: protocol.Option(height), RenderHeightMapType: protocol.HeightMapDataHasData, RenderHeightMapData: protocol.Option(height),
@@ -448,7 +449,7 @@ func TestUnsupportedPacketsAreDropped(t *testing.T) {
 		t.Fatalf("ServerPlayerPostMovePosition conversion count: got %d, want 0", len(got))
 	}
 	update := &packet.ClientboundUpdateSoundData{
-		SetVolume: protocol.Option(protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateSetVolume, Volume: 0.5}),
+		Resume: protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateSetVolume, Volume: 0.5},
 	}
 	if got := (Protocol{}).ConvertFromLatest(update, nil); len(got) != 0 {
 		t.Fatalf("sound update conversion count: got %d, want 0", len(got))
@@ -470,7 +471,7 @@ func TestUnsupportedFieldsAreFilteredWithoutMutation(t *testing.T) {
 	if len(convertedShapes) != 1 {
 		t.Fatalf("primitive shape conversion count: got %d, want 1", len(convertedShapes))
 	}
-	filteredShapes := convertedShapes[0].(*packet.PrimitiveShapes)
+	filteredShapes := v1_26_45.UnwrapWirePacket(convertedShapes[0]).(*packet.PrimitiveShapes)
 	if len(filteredShapes.Shapes) != 1 || filteredShapes.Shapes[0].NetworkID != 1 {
 		t.Fatalf("filtered primitive shapes: %+v", filteredShapes.Shapes)
 	}

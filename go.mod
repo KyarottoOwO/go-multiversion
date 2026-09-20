@@ -3,10 +3,10 @@ module github.com/shawtymarco/go-multiversion
 go 1.25.0
 
 require (
-	github.com/df-mc/worldupgrader v1.0.21
+	github.com/df-mc/worldupgrader v1.0.22
 	github.com/go-gl/mathgl v1.1.0
 	github.com/google/uuid v1.6.0
-	github.com/sandertv/gophertunnel v1.59.1-0.20260820160943-7f058e5ddc39
+	github.com/sandertv/gophertunnel v1.62.0
 )
 
 require (
@@ -46,4 +46,4 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 )
 
-replace github.com/sandertv/gophertunnel => github.com/shawtymarco/gophertunnel v1.57.1-0.20260901131251-1524deb2ed1a
+replace github.com/sandertv/gophertunnel => github.com/shawtymarco/gophertunnel v1.57.1-0.20260920121432-bb499bd61306

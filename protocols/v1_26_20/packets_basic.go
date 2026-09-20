@@ -1,6 +1,7 @@
 package v1_26_20
 
 import (
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 	"image/color"
 
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
@@ -121,7 +122,7 @@ func marshalClientboundUpdateSoundData(io *wireIO, raw packet.Packet) {
 	event := "Stop"
 	io.String(&event)
 	if io.reading {
-		pk.Stop = protocol.Option(protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateStop})
+		pk.Stop = protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateStop}
 	}
 }
 
@@ -151,8 +152,7 @@ func marshalDimensionData(io *wireIO, raw packet.Packet) {
 	protocol.FuncIOSlice(io.directional(), &pk.Definitions, func(raw protocol.IO, definition *protocol.DimensionDefinition) {
 		legacy := asWireIO(raw)
 		legacy.String(&definition.Name)
-		legacy.Varint32(&definition.Range[0])
-		legacy.Varint32(&definition.Range[1])
+		packetio.LegacyDimensionRange(legacy, definition, legacy.reading)
 		legacy.Varint32(&definition.Generator)
 		legacy.Varint32(&definition.DimensionType)
 	})
@@ -261,8 +261,7 @@ func marshalServerBoundDiagnostics(io *wireIO, raw packet.Packet) {
 	io.Float32(&pk.AverageEndFrameTime)
 	io.Float32(&pk.AverageRemainderTimePercent)
 	io.Float32(&pk.AverageUnaccountedTimePercent)
-	protocol.Slice(io.directional(), &pk.MemoryCategoryValues)
-	protocol.Slice(io.directional(), &pk.EntityDiagnostics)
+	v1_26_45.LegacyDiagnostics(io.directional(), &pk.MemoryCategoryValues, &pk.EntityDiagnostics, io.reading, ID)
 	protocol.Slice(io.directional(), &pk.SystemDiagnostics)
 	if io.reading {
 		pk.WhiskerScopes = nil
