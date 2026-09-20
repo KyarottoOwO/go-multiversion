@@ -6,9 +6,24 @@ import (
 	"strings"
 )
 
-// LegacyStartGame excludes native vanilla data-driven definitions. Historical
-// clients use their frozen built-in palettes and derive stairs/connections locally.
+// LegacyStartGame excludes native-only world definitions. Historical clients use
+// their frozen palettes and derive stairs/connections locally. Biome string
+// indices are retained so surviving definitions keep their original references.
 func LegacyStartGame(pk packet.Packet) packet.Packet {
+	if biomes, ok := pk.(*packet.BiomeDefinitionList); ok {
+		cloned := *biomes
+		cloned.BiomeDefinitions = make([]protocol.BiomeDefinition, 0, len(biomes.BiomeDefinitions))
+		for _, entry := range biomes.BiomeDefinitions {
+			if int(entry.NameIndex) < len(biomes.StringList) {
+				name := strings.TrimPrefix(biomes.StringList[entry.NameIndex], "minecraft:")
+				if name == "dappled_forest" {
+					continue
+				}
+			}
+			cloned.BiomeDefinitions = append(cloned.BiomeDefinitions, entry)
+		}
+		return &cloned
+	}
 	game, ok := pk.(*packet.StartGame)
 	if !ok {
 		return pk
