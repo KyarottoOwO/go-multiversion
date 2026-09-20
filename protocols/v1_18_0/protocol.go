@@ -5,6 +5,7 @@ package v1_18_0
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/shawtymarco/go-multiversion/internal/packetconv"
 	"sort"
 
 	"github.com/sandertv/gophertunnel/minecraft"
@@ -205,6 +206,10 @@ func (p Protocol) ConvertToLatest(pk packet.Packet, conn *minecraft.Conn) []pack
 }
 
 func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
+	pk = packetconv.LegacyStartGame(pk)
+	if packetconv.UnsupportedNativePacket(pk) {
+		return nil
+	}
 	mapped := p.convertGameplayFromLatest(pk, conn)
 	converted := make([]packet.Packet, 0, len(mapped))
 	for _, candidate := range mapped {
@@ -281,3 +286,6 @@ func isStableGameVersion(version string) bool {
 		return false
 	}
 }
+
+// MapBiomeRuntimeID downgrades new native biomes before chunk cache hashing.
+func (Protocol) MapBiomeRuntimeID(id uint32) (uint32, bool) { return mapping.Pre12650Biome(id) }

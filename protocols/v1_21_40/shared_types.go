@@ -2,6 +2,8 @@ package v1_21_40
 
 import (
 	"fmt"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 	"image/color"
 	"reflect"
 	"sort"
@@ -375,12 +377,12 @@ func marshalSubChunkEntry(io *wireIO, entry *protocol.SubChunkEntry, cacheEnable
 	io.Uint8(&entry.HeightMapType)
 	if entry.HeightMapType == protocol.HeightMapDataHasData {
 		data, _ := entry.HeightMapData.Value()
-		protocol.FuncSliceOfLen(io.directional(), 256, &data, io.Int8)
+		packetio.LegacyHeightMap(io.directional(), &data)
 		entry.HeightMapData = protocol.Option(data)
 	}
 	if io.reading {
 		entry.RenderHeightMapType = protocol.HeightMapDataNone
-		entry.RenderHeightMapData = protocol.Optional[[]int8]{}
+		entry.RenderHeightMapData = protocol.Optional[protocol.HeightMap]{}
 	}
 	if cacheEnabled {
 		blobHash, _ := entry.BlobHash.Value()
@@ -391,4 +393,6 @@ func marshalSubChunkEntry(io *wireIO, entry *protocol.SubChunkEntry, cacheEnable
 	}
 }
 
-func marshalShapeData(io *wireIO, value *protocol.ShapeData) { io.IO.ShapeData(value) }
+func marshalShapeData(io *wireIO, value *protocol.ShapeData) {
+	v1_26_45.LegacyShapeData(io.IO, value, io.reading)
+}

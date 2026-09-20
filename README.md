@@ -6,11 +6,12 @@
 
 <p align="center">Minecraft Bedrock multiversion adapters for gophertunnel and Dragonfly.</p>
 
-## ✅ Supported Versions
+## Implemented protocol families
 
 | Protocol ID | Minecraft version | Adapter | Support | Tested |
 |------------:|-------------------|---------|:-------:|-------------|
-| 2169 | 1.26.45 | Native gophertunnel | ✅ | ✅ Native advertisement |
+| 2193 | 1.26.50 | Native gophertunnel | 🧪 | Automated; real-client release gate pending |
+| 2169 | 1.26.45 | `v1_26_45` | 🧪 | Historical wire and registry tests |
 | 2168 | 1.26.40-1.26.44 | `v1_26_44` | ✅ | ✅ |
 | 1001 | 1.26.30-1.26.34, 1.26.36 | `v1_26_30` | ✅ | ✅ 1.26.33 |
 | 975 | 1.26.20, 1.26.21, 1.26.23 | `v1_26_20` | ✅ | ✅ 1.26.20/1.26.21 · 🧪 1.26.23 automated |
@@ -27,6 +28,8 @@
 
 > [!NOTE]
 > Version coverage is explicit. Unlisted releases and previews are not implied.
+> Earlier real-client results below are historical evidence. Every family needs
+> renewed real-client validation against native 2193; automated checks do not prove it.
 
 ## 🚀 Usage
 
@@ -40,7 +43,7 @@ conf.AcceptedProtocolsProvider = func(blocks world.BlockRegistry) ([]minecraft.P
 ```
 
 `ProtocolsWithRegistries` returns `2168`, `1001`, `975`, `944`, `924`, `898`,
-`844`, `827`, `766`, `748`, `486`, `475`, and `419` in
+`844`, `827`, `766`, `748`, `486`, `475`, `419`, and `2169` in
 that order. The parameterless `Protocols()` intentionally omits adapters that
 need native block and item registries.
 
@@ -58,7 +61,7 @@ need native block and item registries.
 
 Servers that want to accept protocol `486`, `475`, or `419` clients must use
 [`shawtymarco/gophertunnel`](https://github.com/shawtymarco/gophertunnel) at
-`1524deb2ed1a4c65f595685e30bf38534302e877` or an equivalent implementation.
+the immutable native-2193 revision selected in `go.mod`, or an equivalent implementation.
 The fork keeps the `github.com/sandertv/gophertunnel` module path while adding:
 
 - RakNet v10 acceptance without changing the native v11 advertisement;
@@ -72,13 +75,12 @@ The standard RakNet v11 and `RequestNetworkSettings` path remains unchanged for 
 
 Dragonfly consumers require
 [`shawtymarco/dragonfly`](https://github.com/shawtymarco/dragonfly) at
-`cef8669ca8e873ee9622a4e5d425921fef1458d1` or an implementation with equivalent
-hooks:
+a stable 26.50 revision, with the equivalent generic hooks:
 
 - `AcceptedProtocolsProvider` after block-registry finalisation;
 - `VanillaItemEntries()` for native item mapping;
 - protocol access on each connection;
-- `BlockRuntimeIDMapper` and protocol-aware chunk encoding before cache hashing.
+- `BlockRuntimeIDMapper`, `BiomeRuntimeIDMapper` and protocol-aware chunk encoding before cache hashing.
 - protocol-neutral target range, sub-chunk-version, and 2D-biome encoding for 1.16.100.
 
 > [!WARNING]

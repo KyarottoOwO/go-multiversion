@@ -27,7 +27,10 @@ gophertunnel-based servers.
 
 The current compatibility family is:
 
-- Minecraft 1.26.45 / protocol 2169: native gophertunnel at `7f058e5`.
+- Minecraft 1.26.50 / protocol 2193: native gophertunnel at `7a556a0`, with
+  Dragonfly data at `4c7b5074`. See `versions/1.26.5x.yaml` for the stable lock.
+- Minecraft 1.26.45 / protocol 2169: historical `v1_26_45` adapter with the
+  outgoing registry snapshots and corrected inventory wire at `283a5a9`.
 - Minecraft 1.26.44 / protocol 2168: double-optional `SetScore` adapter based
   on `8a2b1f7`.
 - Minecraft 1.26.40-1.26.43 / protocol 2168: shared-layout adapter based on

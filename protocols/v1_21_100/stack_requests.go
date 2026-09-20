@@ -2,6 +2,7 @@ package v1_21_100
 
 import (
 	"fmt"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
@@ -244,7 +245,7 @@ func marshalItemStackResponse(io *wireIO, response *protocol.ItemStackResponse) 
 					legacy.InvalidValue(slot.HotbarSlot, "hotbar slot", "must equal the normal slot")
 				}
 				legacy.String(&slot.CustomName)
-				legacy.String(&slot.FilteredCustomName)
+				packetio.LegacyFilteredName(legacy, &slot.FilteredCustomName, legacy.reading)
 				legacy.Varint32(&slot.DurabilityCorrection)
 			})
 		})

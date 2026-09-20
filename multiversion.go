@@ -19,11 +19,22 @@ import (
 	"github.com/shawtymarco/go-multiversion/protocols/v1_26_20"
 	"github.com/shawtymarco/go-multiversion/protocols/v1_26_30"
 	"github.com/shawtymarco/go-multiversion/protocols/v1_26_44"
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 )
 
-// Protocols returns all non-native protocols supported by this module.
+// Protocols returns adapters that need no native registry configuration.
+// Every historical release now needs mapping against the 1.26.50 registries,
+// so consumers must use ProtocolsWithRegistries to enable older clients.
 func Protocols() []minecraft.Protocol {
-	return []minecraft.Protocol{v1_26_44.New()}
+	return nil
+}
+
+// V1_26_45 returns the wire-only adapter for the outgoing native release.
+func V1_26_45() minecraft.Protocol { return v1_26_45.New() }
+
+// V1_26_45WithRegistries configures direct mapping from 1.26.45 to native.
+func V1_26_45WithRegistries(native mapping.BlockRegistry, items []protocol.ItemEntry) (minecraft.Protocol, error) {
+	return v1_26_45.NewWithRegistries(native, items)
 }
 
 // V1_26_30 returns the wire-only Minecraft protocol 1001 family adapter for
@@ -165,6 +176,14 @@ func V1_21_130WithBlockRegistry(native mapping.BlockRegistry) (minecraft.Protoco
 // ProtocolsWithBlockRegistry returns all verified non-native protocols,
 // including protocol 1001 configured against the current block registry.
 func ProtocolsWithBlockRegistry(native mapping.BlockRegistry) ([]minecraft.Protocol, error) {
+	u45, err := v1_26_45.NewWithBlockRegistry(native)
+	if err != nil {
+		return nil, err
+	}
+	u44, err := v1_26_44.NewWithBlockRegistry(native)
+	if err != nil {
+		return nil, err
+	}
 	legacy, err := V1_26_30WithBlockRegistry(native)
 	if err != nil {
 		return nil, err
@@ -213,12 +232,20 @@ func ProtocolsWithBlockRegistry(native mapping.BlockRegistry) ([]minecraft.Proto
 	if err != nil {
 		return nil, err
 	}
-	return []minecraft.Protocol{v1_26_44.New(), legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, v486, v475, v419}, nil
+	return []minecraft.Protocol{u44, legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, v486, v475, v419, u45}, nil
 }
 
 // ProtocolsWithRegistries returns all verified adapters after eagerly
 // validating the current block and item registries.
 func ProtocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry) ([]minecraft.Protocol, error) {
+	u45, err := v1_26_45.NewWithRegistries(native, nativeItems)
+	if err != nil {
+		return nil, err
+	}
+	u44, err := v1_26_44.NewWithRegistries(native, nativeItems)
+	if err != nil {
+		return nil, err
+	}
 	legacy, err := v1_26_30.NewWithRegistries(native, nativeItems)
 	if err != nil {
 		return nil, err
@@ -267,7 +294,7 @@ func ProtocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protoco
 	if err != nil {
 		return nil, err
 	}
-	return []minecraft.Protocol{v1_26_44.New(), legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, v486, v475, v419}, nil
+	return []minecraft.Protocol{u44, legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, v486, v475, v419, u45}, nil
 }
 
 // V1_26_44 returns the Minecraft protocol 2168 family adapter. The adapter

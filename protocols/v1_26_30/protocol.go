@@ -5,6 +5,8 @@ package v1_26_30
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/shawtymarco/go-multiversion/internal/packetconv"
+	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 	"sort"
 
 	"github.com/sandertv/gophertunnel/minecraft"
@@ -148,6 +150,9 @@ func (Protocol) Packets(listener bool) packet.Pool {
 	}
 	pool := make(packet.Pool, len(base))
 	for id, constructor := range base {
+		if id > packet.IDPartyDestinationCookieResponse {
+			continue
+		}
 		pool[id] = constructor
 	}
 
@@ -163,6 +168,11 @@ func (Protocol) Packets(listener bool) packet.Pool {
 			continue
 		}
 		pool[id] = translatedConstructor(constructor, marshal)
+	}
+	for id, constructor := range pool {
+		if _, overridden := packetMarshals[id]; !overridden {
+			pool[id] = func() packet.Packet { return v1_26_45.WrapWirePacket(constructor()) }
+		}
 	}
 	return pool
 }
@@ -181,10 +191,14 @@ func (p Protocol) ConvertToLatest(pk packet.Packet, conn *minecraft.Conn) []pack
 	if translated, ok := pk.(*translatedPacket); ok {
 		pk = translated.inner
 	}
-	return p.convertGameplayToLatest(pk, conn)
+	return p.convertGameplayToLatest(v1_26_45.UnwrapWirePacket(pk), conn)
 }
 
 func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
+	pk = packetconv.LegacyStartGame(pk)
+	if packetconv.UnsupportedNativePacket(pk) {
+		return nil
+	}
 	if pk.ID() == packet.IDServerPlayerPostMovePosition {
 		return nil
 	}
@@ -195,3 +209,6 @@ func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []pa
 	}
 	return converted
 }
+
+// MapBiomeRuntimeID downgrades new native biomes before chunk cache hashing.
+func (Protocol) MapBiomeRuntimeID(id uint32) (uint32, bool) { return mapping.Pre12650Biome(id) }

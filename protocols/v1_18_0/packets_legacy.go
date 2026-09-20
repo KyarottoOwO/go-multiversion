@@ -146,7 +146,8 @@ func marshalBossEventBody(io *wireIO, pk *packet.BossEvent, eventType uint32) {
 		io.Float32(&pk.HealthPercentage)
 		marshalAppearance(true)
 	case packet.BossEventRegisterPlayer, packet.BossEventUnregisterPlayer:
-		io.Varint64(&pk.PlayerUniqueID)
+		var discardedPlayerUniqueID int64
+		io.Varint64(&discardedPlayerUniqueID)
 	case packet.BossEventHide:
 	case packet.BossEventHealthPercentage:
 		io.Float32(&pk.HealthPercentage)

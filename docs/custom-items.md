@@ -1,9 +1,10 @@
 # Custom item registry conversion
 
-The current native model is protocol 2169 (1.26.45). Native item components come from Dragonfly
+The current native model is protocol 2193 (1.26.50); the 2169 adapter retains the same
+custom-registry contract. The original 2169 investigation used Dragonfly
 `bbbbc3c682ae1fb75894ee59092bc9ffdac3cd65` plus its public item-registry snapshot API.
-The wire baseline is gophertunnel `7f058e5ddc39`; BRBW's published generic transport fork is
-`1a193af9c670`. No RakNet, Login, block palette, recipe or native protocol version changes are required.
+That investigation used the wire baseline gophertunnel `7f058e5ddc39`; BRBW's published generic transport fork is
+`1a193af9c670`. The stable native migration is recorded separately in `versions/1.26.5x.yaml`.
 
 The existing configured item mapper froze vanilla-only registries. Additional component-based
 non-Minecraft items had no target identity and were consequently omitted from inventories. Custom

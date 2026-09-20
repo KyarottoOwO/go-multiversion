@@ -132,7 +132,7 @@ func marshalClientboundUpdateSoundData(io *wireIO, raw packet.Packet) {
 	event := "Stop"
 	io.String(&event)
 	if io.reading {
-		pk.Stop = protocol.Option(protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateStop})
+		pk.Stop = protocol.SoundDataUpdate{Type: protocol.SoundDataUpdateStop}
 	}
 }
 
@@ -162,8 +162,7 @@ func marshalDimensionData(io *wireIO, raw packet.Packet) {
 	protocol.FuncIOSlice(io.directional(), &pk.Definitions, func(raw protocol.IO, definition *protocol.DimensionDefinition) {
 		legacy := asWireIO(raw)
 		legacy.String(&definition.Name)
-		legacy.Varint32(&definition.Range[0])
-		legacy.Varint32(&definition.Range[1])
+		packetio.LegacyDimensionRange(legacy, definition, legacy.reading)
 		legacy.Varint32(&definition.Generator)
 		if legacy.reading {
 			definition.DimensionType = 0

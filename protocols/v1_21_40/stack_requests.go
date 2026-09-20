@@ -245,7 +245,7 @@ func marshalItemStackResponse(io *wireIO, response *protocol.ItemStackResponse) 
 				}
 				legacy.String(&slot.CustomName)
 				if legacy.reading {
-					slot.FilteredCustomName = ""
+					slot.FilteredCustomName = protocol.Optional[string]{}
 				}
 				legacy.Varint32(&slot.DurabilityCorrection)
 			})

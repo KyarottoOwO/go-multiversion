@@ -44,14 +44,14 @@ func marshalSubChunk(io *wireIO, raw packet.Packet) {
 	if entry.HeightMapType == protocol.HeightMapDataHasData {
 		heightMap, _ := entry.HeightMapData.Value()
 		if io.reading {
-			heightMap = make([]int8, 256)
+			heightMap = protocol.HeightMap{}
 		}
 		for index := 0; index < 256; index++ {
-			io.Int8(&heightMap[index])
+			io.Int8(&heightMap[index/16][index%16])
 		}
 		entry.HeightMapData = protocol.Option(heightMap)
 	} else if io.reading {
-		entry.HeightMapData = protocol.Optional[[]int8]{}
+		entry.HeightMapData = protocol.Optional[protocol.HeightMap]{}
 	}
 	io.Bool(&pk.CacheEnabled)
 	if pk.CacheEnabled {
@@ -64,7 +64,7 @@ func marshalSubChunk(io *wireIO, raw packet.Packet) {
 	if io.reading {
 		entry.Offset = protocol.SubChunkOffset{}
 		entry.RenderHeightMapType = protocol.HeightMapDataNone
-		entry.RenderHeightMapData = protocol.Optional[[]int8]{}
+		entry.RenderHeightMapData = protocol.Optional[protocol.HeightMap]{}
 		pk.SubChunkEntries = []protocol.SubChunkEntry{entry}
 	}
 }
