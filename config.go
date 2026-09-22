@@ -45,5 +45,7 @@ func (c Config) selectProtocols(protocols []minecraft.Protocol) []minecraft.Prot
 			selected = append(selected, p)
 		}
 	}
-	return selected
+	// gophertunnel appends native to the configured slice per connection.
+	// Do not expose spare capacity shared by concurrent listener accepts.
+	return selected[:len(selected):len(selected)]
 }

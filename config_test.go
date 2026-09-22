@@ -28,6 +28,9 @@ func TestMinimumProtocolSelection(t *testing.T) {
 			t.Fatal(err)
 		}
 		selected := config.selectProtocols(all)
+		if cap(selected) != len(selected) {
+			t.Fatal("selection exposes shared capacity to listener appends")
+		}
 		ids := make([]int32, len(selected))
 		for i, p := range selected {
 			ids[i] = p.ID()
