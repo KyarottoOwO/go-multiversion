@@ -113,6 +113,9 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		cloned.Extra = mapBlockChangeEntries(current.Extra, p.runtime.blocks, toTarget)
 		return []packet.Packet{&cloned}
 	case *packet.LevelSoundEvent:
+		if _, ok := legacySoundToID[current.SoundType]; !ok {
+			return nil
+		}
 		cloned := *current
 		if !packetconv.MapLevelSoundBlockRuntimeID(&cloned, func(runtimeID uint32) (uint32, bool) {
 			return mapBlockRuntimeID(runtimeID, p.runtime.blocks, toTarget)
@@ -122,7 +125,9 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		return []packet.Packet{&cloned}
 	case *packet.LevelEvent:
 		cloned := *current
-		mapLevelEventData(&cloned, items, p.runtime.blocks, toTarget)
+		if !mapLevelEventData(&cloned, items, p.runtime.blocks, toTarget) {
+			return nil
+		}
 		return []packet.Packet{&cloned}
 	case *packet.ActorEvent:
 		cloned := *current

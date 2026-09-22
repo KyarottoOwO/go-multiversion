@@ -59,7 +59,9 @@ func mapInventoryTransactionData(value protocol.InventoryTransactionData, items 
 		if !ok {
 			return nil, false
 		}
-		if data.BlockRuntimeID != 0 && blocks != nil {
+		// Zero is a valid registry entry when interacting with a block. Only
+		// the absent block reference on an air click is a zero sentinel.
+		if blocks != nil && (data.BlockRuntimeID != 0 || data.ActionType != protocol.UseItemActionClickAir) {
 			if direction == toTarget {
 				cloned.BlockRuntimeID, _ = blocks.NativeToTarget(data.BlockRuntimeID)
 			} else {
@@ -128,7 +130,7 @@ func mapLevelEventData(pk *packet.LevelEvent, items *mapping.ItemMapper, blocks 
 		if items == nil {
 			return false
 		}
-		itemID, meta := int32(uint32(pk.EventData)>>16), uint32(pk.EventData)&0xffff
+		itemID, meta := int32(int16(uint32(pk.EventData)>>16)), uint32(pk.EventData)&0xffff
 		var mapped int32
 		var ok bool
 		if direction == toTarget {
@@ -154,7 +156,7 @@ func mapActorEventData(pk *packet.ActorEvent, items *mapping.ItemMapper, directi
 	if items == nil {
 		return false
 	}
-	itemID, meta := int32(uint32(pk.EventData)>>16), uint32(pk.EventData)&0xffff
+	itemID, meta := int32(int16(uint32(pk.EventData)>>16)), uint32(pk.EventData)&0xffff
 	var mapped int32
 	var ok bool
 	if direction == toTarget {

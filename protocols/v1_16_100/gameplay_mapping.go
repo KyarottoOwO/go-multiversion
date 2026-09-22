@@ -154,6 +154,9 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		cloned.Extra = mapBlockChangeEntries(current.Extra, p.runtime.blocks, toTarget)
 		return []packet.Packet{&cloned}
 	case *packet.LevelSoundEvent:
+		if door := packetconv.LegacyDoorSound(current); door != nil {
+			return []packet.Packet{door}
+		}
 		cloned := *current
 		if _, ok := legacySoundEvents[cloned.SoundType]; !ok {
 			return nil

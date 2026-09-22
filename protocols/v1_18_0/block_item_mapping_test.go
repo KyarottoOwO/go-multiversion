@@ -53,12 +53,6 @@ func TestLegacyBlockSoundUsesTargetRuntimeID(t *testing.T) {
 		t.Fatal("lime wool block did not map exactly")
 	}
 	for _, soundType := range []string{
-		packet.SoundEventDoorOpen,
-		packet.SoundEventDoorClose,
-		packet.SoundEventTrapdoorOpen,
-		packet.SoundEventTrapdoorClose,
-		packet.SoundEventFenceGateOpen,
-		packet.SoundEventFenceGateClose,
 		packet.SoundEventPlace,
 		packet.SoundEventHit,
 		packet.SoundEventItemUseOn,

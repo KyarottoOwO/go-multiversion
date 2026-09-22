@@ -35,12 +35,20 @@ block registry:
 
 ```go
 conf.AcceptedProtocolsProvider = func(blocks world.BlockRegistry) ([]minecraft.Protocol, error) {
-	return multiversion.ProtocolsWithRegistries(blocks, dragonfly.VanillaItemEntries())
+	return (multiversion.Config{MinimumProtocol: 748}).ProtocolsWithRegistries(blocks, dragonfly.VanillaItemEntries())
 }
 ```
 
 `ProtocolsWithRegistries` enables the registry-aware adapters. The parameterless
 `Protocols()` intentionally omits adapters that need native block and item registries.
+
+`Config.MinimumProtocol` is an inclusive protocol-ID floor: `748` permits the
+supported 1.21.40+ families, `0` (the default) keeps the full catalogue, and
+`2193` permits only native 1.26.50. This does not enable unlisted versions.
+Negative floors and floors newer than native are rejected. Pass the returned
+adapters to the public listener; gophertunnel always accepts native itself.
+The package-level `ProtocolsWithRegistries` keeps its existing unrestricted
+behaviour. See [gameplay regression evidence](versions/gameplay-effects-audit.md).
 
 ### Required integration
 

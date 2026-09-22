@@ -106,8 +106,8 @@ func TestLegacyBlockSoundUsesTargetRuntimeID(t *testing.T) {
 			}
 		})
 	}
-	if got := p.convertGameplayFromLatest(&packet.LevelSoundEvent{SoundType: packet.SoundEventDoorOpen}, nil); len(got) != 0 {
-		t.Fatalf("unsupported door sound converted to %#v", got)
+	if got := p.convertGameplayFromLatest(&packet.LevelSoundEvent{SoundType: packet.SoundEventDoorOpen}, nil); len(got) != 1 || got[0].(*packet.LevelEvent).EventType != packet.LevelEventSoundOpenDoor {
+		t.Fatalf("door sound did not use the legacy toggle event: %#v", got)
 	}
 
 	note := &packet.LevelSoundEvent{SoundType: packet.SoundEventNote, ExtraData: 0x1234}
