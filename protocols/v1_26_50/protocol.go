@@ -1,5 +1,5 @@
 // Package v1_26_50 freezes the outgoing native protocol 2193 wire against the
-// 1.26.60.29/protocol-2223 native model. Registry mapping is still deferred.
+// 1.26.60 Preview native wire model (2223/2225). Registry mapping is still deferred.
 package v1_26_50
 
 import (

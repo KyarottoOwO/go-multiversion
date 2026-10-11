@@ -6,3 +6,5 @@
 # Published native preview sources retain exact bytes for provenance hashes.
 /data/native2223/raw/** -text
 /data/native2223/bds-metadata.json -text
+# Version-specific BDS catalog copies retain their upstream checksum bytes.
+/versions/*-bds.json -text

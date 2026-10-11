@@ -98,7 +98,7 @@ func TestFrozenNativeWireOracles(t *testing.T) {
 
 func TestPreviewFieldsDoNotLeakIntoFrozenWire(t *testing.T) {
 	p := Protocol{}
-	if protocol.CurrentProtocol != 2223 || p.ID() != 2193 {
+	if (protocol.CurrentProtocol != 2223 && protocol.CurrentProtocol != 2225) || p.ID() != 2193 {
 		t.Fatal("wrong native/target identity")
 	}
 	for _, listener := range []bool{true, false} {

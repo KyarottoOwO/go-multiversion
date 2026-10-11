@@ -12,6 +12,10 @@ This branch prepares the [1.26.60.29 native wire model](versions/1.26.60-preview
 Runtime registry and real-client validation are pending. The checks below describe
 existing historical snapshots and automated wire regressions, not .29 gameplay support.
 
+[1.26.60.30 / protocol 2225 upgrade preparation](versions/1.26.60-preview.30-native.md)
+is validated separately with the local gophertunnel candidate. The committed module
+pin remains the published .29 revision until the .30 fork revision is published.
+
 | Protocol ID | Minecraft version | Adapter | Snapshot coverage | Wire tests |
 |------------:|-------------------|---------|:-------:|:------:|
 | 2223 | 1.26.60.29 Preview | Native gophertunnel | Pending | ✅ |

@@ -9,15 +9,17 @@ import (
 	"testing"
 )
 
-func wireAdapters2223() []minecraft.Protocol {
+func wireAdaptersPreview() []minecraft.Protocol {
 	return []minecraft.Protocol{multiversion.V1_26_50(), multiversion.V1_26_45(), multiversion.V1_26_30(), multiversion.V1_26_20(), multiversion.V1_26_10(), multiversion.V1_26_0(), multiversion.V1_21_130(), multiversion.V1_21_110(), multiversion.V1_21_100(), multiversion.V1_21_50(), multiversion.V1_21_40(), multiversion.V1_18_10(), multiversion.V1_18_0(), multiversion.V1_16_100()}
 }
 
 func TestPreviewOnlyPacketExclusionAcrossHistoricalAdapters(t *testing.T) {
-	if protocol.CurrentProtocol != 2223 {
+	// The published .29 pin and the .30 candidate share these packet layouts.
+	// Keep both build paths covered until the new fork revision is published.
+	if protocol.CurrentProtocol != 2223 && protocol.CurrentProtocol != 2225 {
 		t.Fatal("wrong native protocol")
 	}
-	for _, adapter := range wireAdapters2223() {
+	for _, adapter := range wireAdaptersPreview() {
 		t.Run(adapter.Ver(), func(t *testing.T) {
 			for _, listener := range []bool{true, false} {
 				for id := range adapter.Packets(listener) {
@@ -34,7 +36,7 @@ func TestPreviewOnlyPacketExclusionAcrossHistoricalAdapters(t *testing.T) {
 }
 
 func TestDeprecatedStackActionsAcrossHistoricalAdapters(t *testing.T) {
-	for _, adapter := range wireAdapters2223() {
+	for _, adapter := range wireAdaptersPreview() {
 		if adapter.ID() <= 486 {
 			continue
 		}
