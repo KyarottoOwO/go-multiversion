@@ -27,10 +27,13 @@ gophertunnel-based servers.
 
 The current compatibility family is:
 
-- Minecraft 1.26.60.30 / protocol 2225 is an unpublished native upgrade candidate.
+- Minecraft 1.26.60.30 / protocol 2225 is a published native upgrade candidate.
   See `versions/1.26.60-preview.30-native.yaml` for source/validation locks. Verify
   with a disposable module override; publish the fork before changing the committed
   dependency pin. The stored `data/native2223` bundle still belongs only to .29.
+  Exact .30 local acquisition is in `data/native2225`: 23,960 typed block states,
+  2,080 items and captured creative/recipe/biome/entity data. Its block records
+  match .29; this is not equality of all registries or production enablement.
 
 - This `feat/26.60` branch uses native Minecraft 1.26.60.29 Preview / protocol 2223
   at gophertunnel fork `34adb6d` (upstream `28c02f0`). See

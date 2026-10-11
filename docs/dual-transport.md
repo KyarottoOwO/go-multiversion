@@ -4,6 +4,10 @@ Status: implemented as isolated, locally validated consumer candidates, recorded
 below. No production listener is enabled. Native data and real-client validation
 remain separate gates; the .29 data bundle has not been relabeled as .30.
 
+Subsequent work acquired [.30 data locally](../data/native2225/README.md). The
+transport-run record below predates that acquisition; consumer pins, native data
+integration and actual-client validation remain separate tasks.
+
 ```mermaid
 flowchart LR
     R[RakNet UDP listener] --> A[Shared admission and session registry]
