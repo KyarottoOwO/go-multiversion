@@ -68,7 +68,19 @@ func TestPortableExtractionSourceLocks(t *testing.T) {
 		if strings.Contains(file.Path, `\`) || !filepath.IsLocal(file.Path) {
 			t.Fatalf("nonportable source path %q", file.Path)
 		}
-		hash := sha256.Sum256(read(t, filepath.Join("../..", file.Path)))
+		if digest, err := hex.DecodeString(file.SHA256); err != nil || len(digest) != sha256.Size {
+			t.Fatal("invalid source digest")
+		}
+		data, err := os.ReadFile(filepath.Join("../..", file.Path))
+		// The extractor is a separate Go module, excluded from the library's
+		// module zip. Check its bytes when testing a complete source checkout.
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		hash := sha256.Sum256(data)
 		if hex.EncodeToString(hash[:]) != file.SHA256 {
 			t.Fatalf("extractor source changed: %s", file.Path)
 		}
