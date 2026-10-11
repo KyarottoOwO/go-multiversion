@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
@@ -47,6 +48,30 @@ func TestSnapshotFileIntegrity(t *testing.T) {
 				t.Fatal("source bytes changed")
 			}
 		})
+	}
+}
+
+func TestPortableExtractionSourceLocks(t *testing.T) {
+	var source struct {
+		ToolHashes []struct {
+			Path   string
+			SHA256 string
+		} `json:"tool_hashes"`
+	}
+	if err := json.Unmarshal(read(t, "source.json"), &source); err != nil {
+		t.Fatal(err)
+	}
+	if len(source.ToolHashes) == 0 {
+		t.Fatal("missing extractor source locks")
+	}
+	for _, file := range source.ToolHashes {
+		if strings.Contains(file.Path, `\`) || !filepath.IsLocal(file.Path) {
+			t.Fatalf("nonportable source path %q", file.Path)
+		}
+		hash := sha256.Sum256(read(t, filepath.Join("../..", file.Path)))
+		if hex.EncodeToString(hash[:]) != file.SHA256 {
+			t.Fatalf("extractor source changed: %s", file.Path)
+		}
 	}
 }
 
