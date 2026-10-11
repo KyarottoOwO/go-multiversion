@@ -56,6 +56,9 @@ validation:
   local_native_data_acquisition: passed
   native_data_report: "data/native2225/validation.json"
   asset_hash_reproduction: passed
+  loader_nbt_conversion: passed
+  loader_nbt_report: "data/native2225/normalization.json"
+  full_packet_reconstruction_from_nbt: passed
   gophertunnel_tests_vet_build: passed
   committed_dependency_tests_vet: passed
   candidate_dependency_tests_vet_build: passed

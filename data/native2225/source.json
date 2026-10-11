@@ -52,9 +52,10 @@
     "biomes": 89,
     "typed_block_state_equality_with_29": true,
     "internal_blockpalette_memory_walk": false,
-    "furnace_and_education_recipe_profile_extracted": false,
     "runtime_integration": false,
-    "real_client_validation": false
+    "real_client_validation": false,
+    "furnace_recipes_present_in_captured_shapeless": true,
+    "education_recipe_profile_extracted": false
   },
   "tool_hashes": [
     {

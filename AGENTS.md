@@ -34,6 +34,10 @@ The current compatibility family is:
   Exact .30 local acquisition is in `data/native2225`: 23,960 typed block states,
   2,080 items and captured creative/recipe/biome/entity data. Its block records
   match .29; this is not equality of all registries or production enablement.
+  `data/native2225` also provides typed creative/crafting/smithing/potion/biome
+  NBT loaders, with exact packet extras kept in `packet_metadata.nbt`. Furnace
+  families are included in captured shapeless recipes. Live registry installation
+  and real-client validation remain separate work.
 
 - This `feat/26.60` branch uses native Minecraft 1.26.60.29 Preview / protocol 2223
   at gophertunnel fork `34adb6d` (upstream `28c02f0`). See

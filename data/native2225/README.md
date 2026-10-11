@@ -1,7 +1,8 @@
 # Minecraft 1.26.60.30 Preview acquisition
 
-This is a locally extracted source bundle for protocol 2225. It does not activate
-a protocol, replace Dragonfly's live registries, or establish Mojang-client support.
+This is a locally extracted source bundle for protocol 2225 with validated loader
+NBT assets. It does not activate a protocol, replace Dragonfly's live registries,
+or establish Mojang-client support.
 The .29 source bundle remains unchanged in `../native2223`.
 
 ## Exact source
@@ -45,7 +46,7 @@ task's ignored `tmp/native2225/`; scripts are retained in
 - `raw/*.bin`: six exact **packet bodies without packet headers**, from vanilla
   BDS: StartGame, ItemRegistry, CreativeContent, CraftingData,
   BiomeDefinitionList and AvailableActorIdentifiers. No login packets are retained.
-- `item_tags.json`: direct `ItemStack.getTags()` queries for all 2,080 native names.
+- `raw/item_tags.json`: direct `ItemStack.getTags()` queries for all 2,080 native names.
   ItemTypes enumeration exposes only 1,623; querying captured names resolves the
   rest without missing entries. `block_to_item.json` records each default block
   permutation's item and tags; a null item is preserved as unavailable.
@@ -76,11 +77,51 @@ preserve typed values through encode/decode without mutating their inputs.
 The decoder is the published fork `4d6bffd4ed49ac9298d6abaa329415432a16f3e4`.
 Asset normalization was repeated and every output checksum reproduced.
 
+## Loader NBT conversion
+
+[normalization.json](normalization.json) locks the inputs and generated hashes.
+The converter is [tools/normalize_native2225](../../tools/normalize_native2225/README.md).
+All generated files use NetworkLittleEndian NBT:
+
+| File | Loader content |
+| --- | --- |
+| `creative_items.nbt` | 124 groups and 1,980 entries; exact named block properties and typed stack NBT |
+| `crafting_data.nbt` | 1,219 shaped, 2,068 shapeless, 1,456 user-data shapeless and 14 multi recipes |
+| `smithing_data.nbt` | 12 transform recipes, inputs ordered base/addition/template |
+| `smithing_trim_data.nbt` | One trim recipe, same input order and no invented output |
+| `potion_data.nbt` | 210 potion and two container-change recipes |
+| `biome_definitions.nbt` | 89 modern typed definitions, dictionary and optional-tag presence |
+| `entity_identifiers.nbt` | The original entity compound, already NBT on the wire |
+| `packet_metadata.nbt` | Recipe identities, network IDs, unlock conditions, symmetry and creative selection/stack metadata |
+
+Creative, crafting, smithing and potion files use the exact existing Dragonfly
+NBT field schemas at `92ccc8ebb41e46c83114ac1c8d31dd0d6249f0cf`, also represented
+by the historical `data/v1001` loaders. Those decoders reject unknown fields, so
+extra native packet fields live in the separate metadata file. The new typed
+accessors combine both parts. Tests read through the existing loader structs and
+reconstruct complete native CreativeContent, CraftingData and BiomeDefinitionList
+packets, checking all typed values against the original capture.
+
+`item_tags.json` now has the existing loader's **tag → item names** direction:
+77 tags, including all 17 referenced recipe tags. The original item → tags source
+was moved unchanged to `raw/item_tags.json`; `files.json` retains its original hash.
+Some native descriptor names contain a matching `:aux` suffix. The gameplay field
+uses the verified item identifier; metadata preserves the original wire string.
+All-false block properties are retained, and numeric IDs are resolved only against
+this exact .30 registry/hash table.
+
+The earlier statement that furnace data were absent was incorrect: shapeless
+recipes contain 134 furnace, 62 blast-furnace, nine smoker, nine campfire and nine
+soul-campfire entries. They are preserved in `crafting_data.nbt` by crafting station.
+No new capture or older-version substitution was needed.
+
 ## Remaining boundary
 
 This captures the specified vanilla world and script-visible registries. It does
 not assert an unrestricted native memory walk, enabled education/experiment
-profiles, or a complete replacement for all auxiliary BedrockData tables. Furnace
-recipes, legacy upgrade maps, block physics and other data absent from these
-packets/APIs are not fabricated or copied from .29. Native loader integration,
-historical semantic mapping and real-client validation remain separate work.
+profiles, or a complete replacement for all auxiliary BedrockData tables. Legacy
+upgrade maps, block physics and other data absent from these packets/APIs are not
+fabricated or copied from .29. Installing these assets into the live Dragonfly
+registries, supporting their content in gameplay, historical semantic mapping and
+real-client validation remain separate work. Decoding a file is not proof that
+every new block/item already has a Dragonfly gameplay implementation.
