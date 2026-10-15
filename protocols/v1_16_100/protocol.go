@@ -297,5 +297,9 @@ func isStableGameVersion(version string) bool {
 	return version == Version
 }
 
-// MapBiomeRuntimeID downgrades new native biomes before chunk cache hashing.
-func (Protocol) MapBiomeRuntimeID(id uint32) (uint32, bool) { return mapping.Pre12650Biome(id) }
+// MapBiomeRuntimeID downgrades native biomes before chunk cache hashing.
+// Protocol 419 maps through mapping.Biome419: the client resolves every
+// per-column biome byte against its own 71-biome registry and crashes on an
+// ID it cannot resolve, so the mapping is total - a stand-in from the
+// biome's family rather than an unmappable verdict.
+func (Protocol) MapBiomeRuntimeID(id uint32) (uint32, bool) { return mapping.Biome419(id) }
