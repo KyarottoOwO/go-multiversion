@@ -1,4 +1,6 @@
 # Snapshot hashes and wire fixtures must match Git/module-archive bytes on Windows.
+**/go.mod text eol=lf
+**/go.sum text eol=lf
 /data/**/*.json text eol=lf
 /protocols/**/testdata/*.json text eol=lf
 # Preserve the bytes of the historical Tedac snapshot on Windows and in Go module archives.

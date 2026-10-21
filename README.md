@@ -8,18 +8,15 @@
 
 ## Protocols
 
-This branch prepares the [1.26.60.29 native wire model](versions/1.26.60-preview.29-native.md).
-Runtime registry and real-client validation are pending. The checks below describe
-existing historical snapshots and automated wire regressions, not .29 gameplay support.
-
-[1.26.60.30 / protocol 2225 upgrade preparation](versions/1.26.60-preview.30-native.md)
-is validated separately with the local gophertunnel candidate. The committed module
-pin remains the published .29 revision until the .30 fork revision is published.
+The `feat/all_26_u6` branch uses [1.26.60.30 Preview / protocol 2225](versions/1.26.60-preview.30-native.md)
+with the published gophertunnel fork and exact captured .30 registries. Historical
+adapters map directly to this native model. Automated checks do not establish
+Mojang-client gameplay compatibility or support for the final 26.60 release.
 
 | Protocol ID | Minecraft version | Adapter | Snapshot coverage | Wire tests |
 |------------:|-------------------|---------|:-------:|:------:|
-| 2223 | 1.26.60.29 Preview | Native gophertunnel | Pending | ✅ |
-| 2193 | 1.26.50 | `v1_26_50` (wire only) | Mapping pending | ✅ |
+| 2225 | 1.26.60.30 Preview | Native gophertunnel + Dragonfly hash bridge | ✅ | ✅ |
+| 2193 | 1.26.50–1.26.52 | `v1_26_50` | ✅ | ✅ |
 | 2169 | 1.26.45 | `v1_26_45` | ✅ | ✅ |
 | 2168 | 1.26.40-1.26.44 | `v1_26_44` | ✅ | ✅ |
 | 1001 | 1.26.30-1.26.34, 1.26.36 | `v1_26_30` | ✅ | ✅ |
@@ -38,8 +35,8 @@ pin remains the published .29 revision until the .30 fork revision is published.
 Unlisted releases and preview builds are not implied.
 
 [CI coverage and local commands](docs/ci.md) describe the automated checks.
-[Dual public transport admission](docs/dual-transport.md) specifies the proposed
-shared RakNet/NetherNet session owner and its integration gates.
+[Dual public transport admission](docs/dual-transport.md) records the shared
+RakNet/NetherNet session owner, implementation history and integration gates.
 
 ## Usage
 
@@ -57,10 +54,11 @@ conf.AcceptedProtocolsProvider = func(blocks world.BlockRegistry) ([]minecraft.P
 
 `Config.MinimumProtocol` is an inclusive protocol-ID floor: `748` permits the
 supported 1.21.40+ families, `0` (the default) keeps the full catalogue, and
-`2223` permits only native 1.26.60.29 Preview. This does not enable unlisted versions.
-The new 2193 wire adapter is excluded from this catalogue until its registry mapping is ready.
+`2225` permits only native 1.26.60.30 Preview. This does not enable unlisted versions.
+The registry-aware catalogue includes the direct 2193 adapter and its frozen data.
 Negative floors and floors newer than native are rejected. Pass the returned
-adapters to the public listener; gophertunnel always accepts native itself.
+adapters to the public listener. Matching Dragonfly installs its native hash bridge;
+standalone proxies must append `dragonfly.NativeProtocol(blocks)` explicitly.
 The package-level `ProtocolsWithRegistries` keeps its existing unrestricted
 behaviour. See [gameplay regression evidence](versions/gameplay-effects-audit.md).
 

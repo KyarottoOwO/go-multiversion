@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
+	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	format "github.com/shawtymarco/go-multiversion/internal/native2225"
 )
 
@@ -56,6 +57,28 @@ func Creative() (CreativeData, error) {
 	}
 	err = format.ApplyCreativeMetadata(&d, m)
 	return d, err
+}
+
+// CreativePacket reconstructs the exact captured native creative registry from
+// its typed assets and preserved metadata, including the original block hashes.
+func CreativePacket() (*packet.CreativeContent, error) {
+	items, err := Items()
+	if err != nil {
+		return nil, err
+	}
+	blocks, err := BlockStates()
+	if err != nil {
+		return nil, err
+	}
+	codec, err := format.New(items, blocks)
+	if err != nil {
+		return nil, err
+	}
+	creative, err := Creative()
+	if err != nil {
+		return nil, err
+	}
+	return codec.RestoreCreative(creative)
 }
 func Crafting() (CraftingData, error) {
 	d, err := load[CraftingData]("crafting_data.nbt")

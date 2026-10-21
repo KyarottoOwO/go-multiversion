@@ -28,24 +28,25 @@ gophertunnel-based servers.
 The current compatibility family is:
 
 - Minecraft 1.26.60.30 / protocol 2225 is a published native upgrade candidate.
-  See `versions/1.26.60-preview.30-native.yaml` for source/validation locks. Verify
-  with a disposable module override; publish the fork before changing the committed
-  dependency pin. The stored `data/native2223` bundle still belongs only to .29.
+  See `versions/1.26.60-preview.30-native.yaml` for source/validation locks. The
+  committed dependency pins published fork `4d6bffd4ed49`. The stored
+  `data/native2223` bundle still belongs only to .29.
   Exact .30 local acquisition is in `data/native2225`: 23,960 typed block states,
   2,080 items and captured creative/recipe/biome/entity data. Its block records
   match .29; this is not equality of all registries or production enablement.
   `data/native2225` also provides typed creative/crafting/smithing/potion/biome
   NBT loaders, with exact packet extras kept in `packet_metadata.nbt`. Furnace
-  families are included in captured shapeless recipes. Live registry installation
-  and real-client validation remain separate work.
+  families are included in captured shapeless recipes. `tools/export_native2225`
+  installs the verified assets into a matching Dragonfly checkout; block file
+  indexes are local IDs and native clients require Dragonfly's hash bridge.
+  Real-client validation remains a separate gate.
 
-- This `feat/26.60` branch uses native Minecraft 1.26.60.29 Preview / protocol 2223
-  at gophertunnel fork `34adb6d` (upstream `28c02f0`). See
-  `versions/1.26.60-preview.29-native.yaml`. Preview registries and real-client
-  validation are deferred; do not infer production support from wire tests.
-- The outgoing 1.26.50 / 2193 wire codec lives in `protocols/v1_26_50` and is not
-  yet included in the registry-aware catalogue. Its stable data/source freeze is
-  retained below for the later registry mapping stage.
+- This `feat/all_26_u6` branch uses native Minecraft 1.26.60.30 Preview / protocol
+  2225. Do not infer final 26.60 or production support from automated tests.
+- The outgoing 1.26.50–1.26.52 / 2193 adapter lives in `protocols/v1_26_50` and is
+  included in the registry-aware catalogue. `data/v2193/manifest.json` freezes
+  the outgoing Dragonfly `92ccc8e` asset hashes and order. Conversion is direct
+  to/from native, including target block definitions and new derived block fields.
 
 - Outgoing stable baseline, Minecraft 1.26.50 / protocol 2193: gophertunnel fork at `9e7f280` (upstream `80c811b`), with
   Dragonfly data at `4c7b5074`. See `versions/1.26.5x.yaml` for the stable lock

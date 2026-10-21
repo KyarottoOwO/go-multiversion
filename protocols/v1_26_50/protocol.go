@@ -1,12 +1,15 @@
 // Package v1_26_50 freezes the outgoing native protocol 2193 wire against the
-// 1.26.60 Preview native wire model (2223/2225). Registry mapping is still deferred.
+// 1.26.60 Preview native wire model (2225), with direct registry mapping.
 package v1_26_50
 
 import (
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	v2193 "github.com/shawtymarco/go-multiversion/data/v2193"
 	"github.com/shawtymarco/go-multiversion/internal/packetio"
+	"github.com/shawtymarco/go-multiversion/mapping"
+	"strings"
 )
 
 const (
@@ -14,11 +17,51 @@ const (
 	Version       = "1.26.50"
 )
 
-type Protocol struct{}
+type Protocol struct{ runtime *runtimeData }
 
-func New() minecraft.Protocol { return Protocol{} }
-func (Protocol) ID() int32    { return ID }
-func (Protocol) Ver() string  { return Version }
+type MappingReport struct {
+	NativeBlocks, TargetBlocks int
+	NativeItems, TargetItems   int
+	BlockFallbacks             []mapping.BlockFallback
+	ItemFallbacks              []mapping.ItemFallback
+}
+
+func New() minecraft.Protocol { return &Protocol{} }
+
+func NewWithBlockRegistry(native mapping.BlockRegistry) (minecraft.Protocol, error) {
+	return NewWithRegistries(native, nil)
+}
+
+func NewWithRegistries(native mapping.BlockRegistry, items []protocol.ItemEntry) (minecraft.Protocol, error) {
+	runtime, err := newRuntimeData(native, items)
+	if err != nil {
+		return nil, err
+	}
+	return &Protocol{runtime: runtime}, nil
+}
+
+func (p Protocol) MapBlockRuntimeID(id uint32) (uint32, bool) {
+	if p.runtime == nil {
+		return 0, false
+	}
+	mapped, valid, _ := p.runtime.blocks.MapNative(id)
+	return mapped, valid
+}
+
+func (p Protocol) MappingReport() MappingReport {
+	if p.runtime == nil {
+		return MappingReport{}
+	}
+	r := MappingReport{NativeBlocks: p.runtime.blocks.NativeCount(), TargetBlocks: p.runtime.blocks.TargetCount(), BlockFallbacks: p.runtime.blocks.Fallbacks()}
+	if items := p.runtime.currentItemMapper(); items != nil {
+		r.NativeItems, r.TargetItems, r.ItemFallbacks = items.NativeCount(), items.TargetCount(), items.Fallbacks()
+	}
+	return r
+}
+
+func (Protocol) MapBiomeRuntimeID(id uint32) (uint32, bool) { return id, true }
+func (Protocol) ID() int32                                  { return ID }
+func (Protocol) Ver() string                                { return Version }
 
 func (Protocol) Packets(listener bool) packet.Pool {
 	pool := packet.NewServerPool()
@@ -56,19 +99,36 @@ func (Protocol) NewWriter(w minecraft.ByteWriter, shieldID int32) protocol.IO {
 	return &writer{protocol.NewWriter(w, shieldID)}
 }
 
-func (Protocol) ConvertToLatest(pk packet.Packet, _ *minecraft.Conn) []packet.Packet {
-	return []packet.Packet{UnwrapWirePacket(pk)}
+func (p Protocol) ConvertToLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
+	return p.convertGameplayToLatest(UnwrapWirePacket(pk), conn)
 }
-func (Protocol) ConvertFromLatest(pk packet.Packet, _ *minecraft.Conn) []packet.Packet {
+func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
 	if pk.ID() > packet.IDRecordStarted {
 		return nil
 	}
 	if start, ok := pk.(*packet.StartGame); ok {
 		copy := *start
 		copy.GameVersion, copy.BaseGameVersion = Version, Version
+		copy.UseBlockNetworkIDHashes = false
+		if p.runtime != nil {
+			definitions, err := v2193.BlockDefinitions()
+			if err != nil {
+				return nil
+			}
+			copy.Blocks = definitions
+			for _, block := range start.Blocks {
+				if !strings.HasPrefix(block.Name, "minecraft:") {
+					copy.Blocks = append(copy.Blocks, block)
+				}
+			}
+		}
 		pk = &copy
 	}
-	return []packet.Packet{WrapWirePacket(pk)}
+	mapped := p.convertGameplayFromLatest(pk, conn)
+	for i := range mapped {
+		mapped[i] = WrapWirePacket(mapped[i])
+	}
+	return mapped
 }
 
 type wireMarshal func(protocol.IO, packet.Packet, bool)

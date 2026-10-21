@@ -1,12 +1,15 @@
 # Public RakNet and NetherNet admission
 
-Status: implemented as isolated, locally validated consumer candidates, recorded
-below. No production listener is enabled. Native data and real-client validation
-remain separate gates; the .29 data bundle has not been relabeled as .30.
+Status: the combined `feat/all_26_u6` branches integrate the published transport
+candidates with [exact .30 data](../data/native2225/README.md). This repository pins
+gophertunnel `4d6bffd4ed49` / 2225 and includes configured outgoing 2193 mapping.
+The matching Dragonfly branch installs the captured registry with native block
+hashes, and BRBW removes its temporary build-tag gate. Downstream fork publication,
+immutable consumer pins and actual-client/external-network validation remain gates.
 
-Subsequent work acquired [.30 data locally](../data/native2225/README.md). The
-transport-run record below predates that acquisition; consumer pins, native data
-integration and actual-client validation remain separate tasks.
+The implementation-run records below describe the earlier isolated candidates.
+Their old branch names, module pins and deferred registry work are historical,
+not the current integration state. The .29 bundle retains its original identity.
 
 ```mermaid
 flowchart LR

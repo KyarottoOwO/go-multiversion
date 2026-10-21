@@ -2,7 +2,7 @@ schema_version: 1
 target_game_version: "1.26.60.30"
 target_protocol_id: 2225
 stability: preview
-work_branch: "feat/26.60"
+work_branch: "feat/all_26_u6"
 release_date: "2026-10-06"
 release_notes: "https://feedback.minecraft.net/hc/en-us/articles/49413473578637-Minecraft-Beta-Preview-26-60-30"
 candidate:
@@ -12,10 +12,10 @@ candidate:
   published: true
   published_via: "4d6bffd4ed49ac9298d6abaa329415432a16f3e4"
 committed_dependency:
-  gophertunnel_commit: "34adb6db991480b8a7665959d10226078cf279fa"
-  module: "github.com/shawtymarco/gophertunnel@v1.57.1-0.20261001021118-34adb6db9914"
-  native_protocol_id: 2223
-  repin_after_candidate_publication: true
+  gophertunnel_commit: "4d6bffd4ed49ac9298d6abaa329415432a16f3e4"
+  module: "github.com/shawtymarco/gophertunnel@v1.57.1-0.20261011160103-4d6bffd4ed49"
+  native_protocol_id: 2225
+  repin_after_candidate_publication: false
 comparison:
   previous_preview: "1.26.60.29"
   previous_protocol_id: 2223
@@ -66,8 +66,8 @@ validation:
   native_identity_probe: 2225
   request_network_settings_body_hex: "000008b1"
 deferred:
-  dependency_publication_and_repin: true
-  target_registry_validation_and_conversion: true
+  downstream_fork_publication_and_consumer_repin: true
+  target_registry_validation_and_conversion: false
   command_request_vanilla_wire_validation: true
   nethernet_consumer_integration: true
   real_client_validation: true

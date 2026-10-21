@@ -427,6 +427,24 @@ func nativeCompatibilityVariants(properties map[string]any) []map[string]any {
 			}
 		}
 		variants = append(variants, withConnections)
+		// Native 26.60 fire adds an upper flame face as well. Keep the
+		// four-face candidate for panes/fences and try the five-face state
+		// separately; adding an upper face to every block would be invalid.
+		withUpper := cloneProperties(withConnections)
+		withUpper["minecraft:connection_up"] = false
+		variants = append(variants, withUpper)
+		withVertical := cloneProperties(withUpper)
+		withVertical["minecraft:connection_down"] = false
+		variants = append(variants, withVertical)
+	}
+	if _, wire := properties["redstone_signal"]; wire {
+		withWire := cloneProperties(properties)
+		for _, key := range []string{"redstone_north", "redstone_east", "redstone_south", "redstone_west"} {
+			if _, exists := withWire[key]; !exists {
+				withWire[key] = "none"
+			}
+		}
+		variants = append(variants, withWire)
 	}
 	return variants
 }
@@ -435,6 +453,11 @@ func stripNativeCompatibilityProperties(properties map[string]any) map[string]an
 	stripped := cloneProperties(properties)
 	for name := range nativeCompatibilityDefaults {
 		delete(stripped, name)
+	}
+	delete(stripped, "minecraft:connection_up")
+	delete(stripped, "minecraft:connection_down")
+	for _, key := range []string{"redstone_north", "redstone_east", "redstone_south", "redstone_west"} {
+		delete(stripped, key)
 	}
 	return stripped
 }

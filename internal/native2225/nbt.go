@@ -13,7 +13,13 @@ import (
 
 // Marshal emits deterministic NetworkLittleEndian NBT without converting typed
 // component compounds through JSON numbers.
-func Marshal(v any) ([]byte, error)   { return nbt.Marshal(ordered(reflect.ValueOf(v)).Interface()) }
+func Marshal(v any) ([]byte, error) { return nbt.Marshal(ordered(reflect.ValueOf(v)).Interface()) }
+
+// MarshalEncoding retains deterministic compounds for consumers whose embedded
+// resource format uses ordinary LittleEndian instead of network NBT.
+func MarshalEncoding(v any, encoding nbt.Encoding) ([]byte, error) {
+	return nbt.MarshalEncoding(ordered(reflect.ValueOf(v)).Interface(), encoding)
+}
 func orderedMap(v map[string]any) any { return ordered(reflect.ValueOf(v)).Interface() }
 
 func ordered(v reflect.Value) reflect.Value {
