@@ -13,7 +13,7 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	multiversion "github.com/shawtymarco/go-multiversion"
-	v2169 "github.com/shawtymarco/go-multiversion/data/v2169"
+	native "github.com/shawtymarco/go-multiversion/data/v2225"
 	"github.com/shawtymarco/go-multiversion/mapping"
 )
 
@@ -39,7 +39,7 @@ func (r effectsRegistry) RuntimeIDToState(id uint32) (string, map[string]any, bo
 
 func effectsProtocols(t *testing.T) []minecraft.Protocol {
 	t.Helper()
-	states, err := v2169.BlockStates()
+	states, err := native.BlockStates()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func effectsProtocols(t *testing.T) []minecraft.Protocol {
 	if registry[0].Name != "minecraft:lime_wool" {
 		t.Fatal("lime wool missing from locked snapshot")
 	}
-	snapshot, err := v2169.Items()
+	snapshot, err := native.Items()
 	if err != nil {
 		t.Fatal(err)
 	}

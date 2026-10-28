@@ -1,6 +1,9 @@
 package v1_16_100
 
-import "github.com/sandertv/gophertunnel/minecraft/protocol"
+import (
+	"github.com/go-gl/mathgl/mgl32"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
+)
 
 type wireIO struct {
 	protocol.IO
@@ -41,6 +44,16 @@ func (io *wireIO) UBlockPos(x *protocol.BlockPos) {
 	io.Varuint32(&y)
 	x[1] = int32(y)
 	io.Varint32(&x[2])
+}
+
+func (io *wireIO) SoundPos(x *mgl32.Vec3) {
+	pos := protocol.BlockPos{
+		int32((*x)[0] * 8),
+		int32((*x)[1] * 8),
+		int32((*x)[2] * 8),
+	}
+	io.UBlockPos(&pos)
+	*x = mgl32.Vec3{float32(pos[0]) / 8, float32(pos[1]) / 8, float32(pos[2]) / 8}
 }
 
 func (io *wireIO) directional() protocol.IO {

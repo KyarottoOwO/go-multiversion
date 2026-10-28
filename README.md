@@ -8,9 +8,16 @@
 
 ## Protocols
 
-| Protocol ID | Minecraft version | Adapter | Support | Tested |
+The native wire model is stable **Minecraft 1.26.60 / protocol 2225**.
+Historical adapters map directly to it, including the outgoing 1.26.50 family.
+[Stable source locks](versions/1.26.60-native.md) distinguish the final data from
+retained Preview acquisitions. Automated checks do not establish Mojang-client
+gameplay compatibility.
+
+| Protocol ID | Minecraft version | Adapter | Snapshot coverage | Wire tests |
 |------------:|-------------------|---------|:-------:|:------:|
-| 2193 | 1.26.50 | Native gophertunnel | ✅ | ✅ |
+| 2225 | 1.26.60 | Native gophertunnel + Dragonfly hash bridge | ✅ | ✅ |
+| 2193 | 1.26.50–1.26.52 | `v1_26_50` | ✅ | ✅ |
 | 2169 | 1.26.45 | `v1_26_45` | ✅ | ✅ |
 | 2168 | 1.26.40-1.26.44 | `v1_26_44` | ✅ | ✅ |
 | 1001 | 1.26.30-1.26.34, 1.26.36 | `v1_26_30` | ✅ | ✅ |
@@ -28,6 +35,10 @@
 
 Unlisted releases and preview builds are not implied.
 
+[CI coverage and local commands](docs/ci.md) describe the automated checks.
+[Dual public transport admission](docs/dual-transport.md) records the shared
+RakNet/NetherNet session owner, implementation history and integration gates.
+
 ## Usage
 
 Registry-aware adapters must be created after Dragonfly finalises its native
@@ -44,9 +55,11 @@ conf.AcceptedProtocolsProvider = func(blocks world.BlockRegistry) ([]minecraft.P
 
 `Config.MinimumProtocol` is an inclusive protocol-ID floor: `748` permits the
 supported 1.21.40+ families, `0` (the default) keeps the full catalogue, and
-`2193` permits only native 1.26.50. This does not enable unlisted versions.
+`2225` permits only native 1.26.60.30 Preview. This does not enable unlisted versions.
+The registry-aware catalogue includes the direct 2193 adapter and its frozen data.
 Negative floors and floors newer than native are rejected. Pass the returned
-adapters to the public listener; gophertunnel always accepts native itself.
+adapters to the public listener. Matching Dragonfly installs its native hash bridge;
+standalone proxies must append `dragonfly.NativeProtocol(blocks)` explicitly.
 The package-level `ProtocolsWithRegistries` keeps its existing unrestricted
 behaviour. See [gameplay regression evidence](versions/gameplay-effects-audit.md).
 
