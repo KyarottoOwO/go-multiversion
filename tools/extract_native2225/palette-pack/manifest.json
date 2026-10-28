@@ -1,0 +1,12 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Native 2225 registry extraction",
+    "description": "Disposable development-only registry enumeration; adds no blocks or items",
+    "uuid": "c69bb36f-6d41-4e5c-85e2-9dc356763b81",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 60]
+  },
+  "modules": [{"type":"script","language":"javascript","uuid":"3ad511c3-d599-4f2d-b417-5b595ac82a56","version":[1,0,0],"entry":"scripts/main.js"}],
+  "dependencies": [{"module_name":"@minecraft/server","version":"2.0.0"}]
+}

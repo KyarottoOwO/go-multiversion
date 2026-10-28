@@ -1,6 +1,9 @@
 package v1_16_100
 
-import "github.com/sandertv/gophertunnel/minecraft/protocol"
+import (
+	"github.com/go-gl/mathgl/mgl32"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
+)
 
 type wireIO struct {
 	protocol.IO
