@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/df-mc/worldupgrader/blockupgrader"
 )
@@ -64,7 +65,10 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 	if native == nil {
 		return nil, fmt.Errorf("native block registry is nil")
 	}
-	targetStates := append([]BlockState(nil), historical...)
+	targetStates := make([]BlockState, len(historical))
+	for index, state := range historical {
+		targetStates[index] = BlockState{Name: state.Name, Properties: internProperties(state.Properties), Version: state.Version}
+	}
 	if sortTarget {
 		sort.SliceStable(targetStates, func(i, j int) bool {
 			return fnv1String(targetStates[i].Name) < fnv1String(targetStates[j].Name)
@@ -117,7 +121,7 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 			}
 			nativeAliases[aliasKey] = runtimeID
 		}
-		nativeStates[index] = BlockState{Name: name, Properties: cloneProperties(properties)}
+		nativeStates[index] = BlockState{Name: name, Properties: internProperties(properties)}
 	}
 
 	targetToNative := make([]uint32, len(targetStates))
@@ -228,7 +232,7 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 		fallbacks = append(fallbacks, BlockFallback{
 			NativeRuntimeID: uint32(runtimeID),
 			Name:            state.Name,
-			Properties:      cloneProperties(state.Properties),
+			Properties:      internProperties(state.Properties),
 			TargetRuntimeID: targetAir,
 		})
 	}
@@ -365,6 +369,37 @@ func cloneProperties(properties map[string]any) map[string]any {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+// propertiesInterner canonicalises property maps so that identical block
+// states across every historical registry built in the process share one
+// instance. Canonical maps must stay immutable after interning: every
+// egress from BlockMapper already deep-copies per call, and the mutating
+// copies (compatibility variants, upgrade inputs) still go through
+// cloneProperties.
+var propertiesInterner sync.Map
+
+func internProperties(properties map[string]any) map[string]any {
+	if properties == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(properties))
+	for key := range properties {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var signature strings.Builder
+	for _, key := range keys {
+		signature.WriteString(key)
+		signature.WriteByte('=')
+		fmt.Fprint(&signature, properties[key])
+		signature.WriteByte(';')
+	}
+	if cached, ok := propertiesInterner.Load(signature.String()); ok {
+		return cached.(map[string]any)
+	}
+	actual, _ := propertiesInterner.LoadOrStore(signature.String(), properties)
+	return actual.(map[string]any)
 }
 
 // nativeCompatibilityProperties normalises known third-party Dragonfly block
