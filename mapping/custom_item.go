@@ -97,7 +97,7 @@ func (m *ItemMapper) RegistryEntries(source []protocol.ItemEntry, targetProtocol
 			entry.Data["id"] = int32(entry.RuntimeID)
 			entry.Data["name"] = entry.Name
 			if targetProtocol <= 486 {
-				shapeLegacyItemComponents(entry.Data)
+				shapeLegacyItemComponents(entry.Data, entry.RuntimeID)
 			}
 		}
 		out = append(out, entry)
@@ -105,54 +105,49 @@ func (m *ItemMapper) RegistryEntries(source []protocol.ItemEntry, targetProtocol
 	return out
 }
 
-// legacyUseAnimations rewrites the modern numeric inventory item animation
-// enum (0 none, 1 eat, 2 drink) into the 1.16.x string alphabet.
-var legacyUseAnimations = map[int32]string{
-	0: "none",
-	1: "eat",
-	2: "drink",
-}
-
 // shapeLegacyItemComponents rewrites a modern item component payload into the
-// alphabet the 1.16.x data-driven clients read. The clients parse the NBT
-// strictly by tag type and reject an item whose fields arrive in the other
-// era's representation, marking the stack unknown: an invisible icon and a
-// stack the player cannot use or move. The rewrites are:
+// flat alphabet the 1.16.x data-driven clients register custom items in. That
+// era's client does not know the components wrapper or the id/name keys the
+// later registries carry: identity in its NBT is the runtime id in a
+// minecraft:identifier short, the properties the icon and the drink animation
+// come from sit in a root item_properties compound, and every further
+// component - the food and the display name - is a sibling at the root. A
+// payload the era cannot read marks the item unknown: an invisible icon and
+// a stack the fighter cannot use or move.
 //
-//   - the icon property is the atlas key, not the modern texture\\default pair;
-//   - the eat animation is a string, not the modern enum number;
-//   - the use duration is a float of seconds, not a tick count;
-//   - the food component carries the hunger fields every vanilla registry
-//     on every client era includes, which the era's client requires.
-func shapeLegacyItemComponents(data map[string]any) {
-	components, _ := data["components"].(map[string]any)
-	properties, _ := components["item_properties"].(map[string]any)
-	if properties == nil {
+// Within item_properties the modern representation already matches the era:
+// the icon is downgraded to its atlas key, and the use animation and duration
+// stay the era's ints - animation enum and tick count.
+func shapeLegacyItemComponents(data map[string]any, runtimeID int16) {
+	components, ok := data["components"].(map[string]any)
+	if !ok {
 		return
 	}
-	if icon, ok := properties["minecraft:icon"].(map[string]any); ok {
-		textures, _ := icon["textures"].(map[string]any)
-		if texture, ok := textures["default"].(string); ok {
-			properties["minecraft:icon"] = map[string]any{"texture": texture}
+	for key, value := range components {
+		data[key] = value
+	}
+	delete(data, "components")
+	delete(data, "id")
+	delete(data, "name")
+
+	if properties, ok := data["item_properties"].(map[string]any); ok {
+		if icon, ok := properties["minecraft:icon"].(map[string]any); ok {
+			textures, _ := icon["textures"].(map[string]any)
+			if texture, ok := textures["default"].(string); ok {
+				properties["minecraft:icon"] = map[string]any{"texture": texture}
+			}
 		}
 	}
-	if animation, ok := properties["use_animation"].(int32); ok {
-		if name, ok := legacyUseAnimations[animation]; ok {
-			properties["use_animation"] = name
-		} else {
-			delete(properties, "use_animation")
-		}
-	}
-	if duration, ok := properties["use_duration"].(int32); ok {
-		properties["use_duration"] = float32(duration) / 20.0
-	}
-	if food, ok := components["minecraft:food"].(map[string]any); ok {
+	if food, ok := data["minecraft:food"].(map[string]any); ok {
 		if _, ok := food["nutrition"]; !ok {
 			food["nutrition"] = int32(0)
 		}
 		if _, ok := food["saturation_modifier"]; !ok {
 			food["saturation_modifier"] = float32(0)
 		}
+	}
+	if _, ok := data["minecraft:identifier"]; !ok {
+		data["minecraft:identifier"] = runtimeID
 	}
 }
 

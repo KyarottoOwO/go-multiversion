@@ -41,7 +41,7 @@ func TestCustomItemsDoNotOverwriteVanillaOrAcceptChangedBackendIDs(t *testing.T)
 		t.Fatal("another backend remapped shared state")
 	}
 	before := mapper.TargetEntries()
-	entries[0].Data["components"].(map[string]any)["item_properties"].(map[string]any)["minecraft:icon"] = "modified"
+	entries[0].Data["item_properties"].(map[string]any)["minecraft:icon"] = "modified"
 	if !reflect.DeepEqual(before, mapper.TargetEntries()) {
 		t.Fatal("target components were not isolated")
 	}
@@ -50,12 +50,13 @@ func TestCustomItemsDoNotOverwriteVanillaOrAcceptChangedBackendIDs(t *testing.T)
 	}
 }
 
-// TestLegacyEntriesArcShapedForTheClientPin the alphabet rewrite the 1.16.x
-// component packet applies: those clients read the fields by NBT tag type, and
-// an item whose animation arrives as a number, duration in ticks or food
-// without its hunger fields is marked unknown - an invisible stack the player
-// cannot use. The modern registries keep their own representation.
-func TestLegacyEntriesArcShapedForTheClient(t *testing.T) {
+// TestLegacyEntriesAreShapedForTheClient pins the flat rewrite the 1.16.x
+// component packet applies: those clients register custom items in a root
+// alphabet - item_properties beside the food and display name components, the
+// runtime id in a minecraft:identifier short, and no components wrapper or
+// id/name keys. A payload in the later shape is unreadable to the era and the
+// item is marked unknown.
+func TestLegacyEntriesAreShapedForTheClient(t *testing.T) {
 	data := map[string]any{"components": map[string]any{
 		"item_properties": map[string]any{
 			"minecraft:icon":    map[string]any{"textures": map[string]any{"default": "example:menu"}},
@@ -64,7 +65,8 @@ func TestLegacyEntriesArcShapedForTheClient(t *testing.T) {
 			"max_stack_size":    int32(16),
 			"creative_category": int32(1),
 		},
-		"minecraft:food": map[string]any{"can_always_eat": true},
+		"minecraft:food":        map[string]any{"can_always_eat": true},
+		"minecraft:display_name": map[string]any{"value": "Menu"},
 	}}
 	custom := protocol.ItemEntry{Name: "example:menu", RuntimeID: 2, ComponentBased: true, Version: 1, Data: data}
 	native := []protocol.ItemEntry{{Name: "minecraft:stone", RuntimeID: 1}, custom}
@@ -79,23 +81,44 @@ func TestLegacyEntriesArcShapedForTheClient(t *testing.T) {
 		if len(out) != 1 {
 			t.Fatalf("protocol %d lost its entries", version)
 		}
-		comps := out[0].Data["components"].(map[string]any)
-		props := comps["item_properties"].(map[string]any)
+		comps := out[0].Data
+		props, ok := comps["item_properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("protocol %d buried item_properties behind the components wrapper", version)
+		}
 		if icon, ok := props["minecraft:icon"].(map[string]any); !ok || icon["texture"] != "example:menu" {
 			t.Fatalf("protocol %d did not flatten the icon: %v", version, props["minecraft:icon"])
 		}
-		if props["use_animation"] != "drink" {
-			t.Fatalf("protocol %d kept a numeric drink animation: %v", version, props["use_animation"])
+		if props["use_animation"] != int32(2) {
+			t.Fatalf("protocol %d changed the drink animation: %v", version, props["use_animation"])
 		}
-		if d, ok := props["use_duration"].(float32); !ok || d != 1.6 {
-			t.Fatalf("protocol %d kept a tick duration: %v", version, props["use_duration"])
+		if d, ok := props["use_duration"].(int32); !ok || d != 32 {
+			t.Fatalf("protocol %d changed the tick duration: %v", version, props["use_duration"])
 		}
-		food := comps["minecraft:food"].(map[string]any)
+		food, ok := comps["minecraft:food"].(map[string]any)
+		if !ok {
+			t.Fatalf("protocol %d buried the food component", version)
+		}
 		if f, ok := food["nutrition"].(int32); !ok || f != 0 {
 			t.Fatalf("protocol %d did not fill the food nutrition: %v", version, food["nutrition"])
 		}
 		if s, ok := food["saturation_modifier"].(float32); !ok || s != 0 {
 			t.Fatalf("protocol %d did not fill the food saturation: %v", version, food["saturation_modifier"])
+		}
+		if _, ok := comps["components"]; ok {
+			t.Fatalf("protocol %d kept the components wrapper", version)
+		}
+		if _, ok := comps["id"]; ok {
+			t.Fatalf("protocol %d kept the id key", version)
+		}
+		if _, ok := comps["name"]; ok {
+			t.Fatalf("protocol %d kept the name key", version)
+		}
+		if id, ok := comps["minecraft:identifier"].(int16); !ok || id != out[0].RuntimeID {
+			t.Fatalf("protocol %d did not carry the identifier short: %v", version, comps["minecraft:identifier"])
+		}
+		if _, ok := comps["minecraft:display_name"].(map[string]any); !ok {
+			t.Fatalf("protocol %d buried the display name", version)
 		}
 	}
 
