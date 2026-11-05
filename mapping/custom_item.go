@@ -97,18 +97,63 @@ func (m *ItemMapper) RegistryEntries(source []protocol.ItemEntry, targetProtocol
 			entry.Data["id"] = int32(entry.RuntimeID)
 			entry.Data["name"] = entry.Name
 			if targetProtocol <= 486 {
-				components, _ := entry.Data["components"].(map[string]any)
-				properties, _ := components["item_properties"].(map[string]any)
-				icon, _ := properties["minecraft:icon"].(map[string]any)
-				textures, _ := icon["textures"].(map[string]any)
-				if texture, ok := textures["default"].(string); ok {
-					properties["minecraft:icon"] = map[string]any{"texture": texture}
-				}
+				shapeLegacyItemComponents(entry.Data)
 			}
 		}
 		out = append(out, entry)
 	}
 	return out
+}
+
+// legacyUseAnimations rewrites the modern numeric inventory item animation
+// enum (0 none, 1 eat, 2 drink) into the 1.16.x string alphabet.
+var legacyUseAnimations = map[int32]string{
+	0: "none",
+	1: "eat",
+	2: "drink",
+}
+
+// shapeLegacyItemComponents rewrites a modern item component payload into the
+// alphabet the 1.16.x data-driven clients read. The clients parse the NBT
+// strictly by tag type and reject an item whose fields arrive in the other
+// era's representation, marking the stack unknown: an invisible icon and a
+// stack the player cannot use or move. The rewrites are:
+//
+//   - the icon property is the atlas key, not the modern texture\\default pair;
+//   - the eat animation is a string, not the modern enum number;
+//   - the use duration is a float of seconds, not a tick count;
+//   - the food component carries the hunger fields every vanilla registry
+//     on every client era includes, which the era's client requires.
+func shapeLegacyItemComponents(data map[string]any) {
+	components, _ := data["components"].(map[string]any)
+	properties, _ := components["item_properties"].(map[string]any)
+	if properties == nil {
+		return
+	}
+	if icon, ok := properties["minecraft:icon"].(map[string]any); ok {
+		textures, _ := icon["textures"].(map[string]any)
+		if texture, ok := textures["default"].(string); ok {
+			properties["minecraft:icon"] = map[string]any{"texture": texture}
+		}
+	}
+	if animation, ok := properties["use_animation"].(int32); ok {
+		if name, ok := legacyUseAnimations[animation]; ok {
+			properties["use_animation"] = name
+		} else {
+			delete(properties, "use_animation")
+		}
+	}
+	if duration, ok := properties["use_duration"].(int32); ok {
+		properties["use_duration"] = float32(duration) / 20.0
+	}
+	if food, ok := components["minecraft:food"].(map[string]any); ok {
+		if _, ok := food["nutrition"]; !ok {
+			food["nutrition"] = int32(0)
+		}
+		if _, ok := food["saturation_modifier"]; !ok {
+			food["saturation_modifier"] = float32(0)
+		}
+	}
 }
 
 // CustomItemExperiments is the only data-driven experiment needed by the legacy
