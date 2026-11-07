@@ -1,3 +1,5 @@
+github.com/MewishMC/gophertunnel v1.57.1-0.20261030212636-ae641c271f40 h1:tdsprDJ+9RiyzjMGGefhtL3GO2TAFVQ1GuT+oNbAR48=
+github.com/MewishMC/gophertunnel v1.57.1-0.20261030212636-ae641c271f40/go.mod h1:hOjJWwzgmTw/Di+cYKVyoDxVtQINwqHVAYtgmTLo15A=
 github.com/coder/websocket v1.8.14 h1:9L0p0iKiNOibykf283eHkKUHHrpG7f65OE3BhhO7v9g=
 github.com/coder/websocket v1.8.14/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
 github.com/coreos/go-oidc/v3 v3.17.0 h1:hWBGaQfbi0iVviX4ibC7bk8OKT5qNr4klBaCHVNvehc=
