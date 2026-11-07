@@ -14,6 +14,10 @@ type Config struct {
 	// MinimumProtocol is an inclusive protocol ID floor. Zero enables the full
 	// supported catalogue. A floor never adds support for an unlisted protocol.
 	MinimumProtocol int32
+	// BlockSubstitutions419 maps native block states that the 1.16.100 palette
+	// cannot represent onto older target states. Nil keeps the air fallback.
+	// Substituted states remain non-exact, so item conversion still rejects them.
+	BlockSubstitutions419 []mapping.BlockSubstitution
 }
 
 // Validate rejects a floor that cannot be enforced by the native listener.
@@ -31,7 +35,7 @@ func (c Config) ProtocolsWithRegistries(native mapping.BlockRegistry, items []pr
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	protocols, err := ProtocolsWithRegistries(native, items)
+	protocols, err := protocolsWithRegistries(native, items, c.BlockSubstitutions419)
 	if err != nil {
 		return nil, err
 	}

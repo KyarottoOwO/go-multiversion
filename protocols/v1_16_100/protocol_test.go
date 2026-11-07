@@ -210,7 +210,7 @@ func TestGameRulesChangedUsesHistoricalRuleLayout(t *testing.T) {
 }
 
 func TestStartGameWritesFullTargetBlockPalette(t *testing.T) {
-	runtime, err := newRuntimeData(protocol419IntegrationBlockRegistry(t), []protocol.ItemEntry{{Name: "minecraft:stone", RuntimeID: 1}})
+	runtime, err := newRuntimeData(protocol419IntegrationBlockRegistry(t), []protocol.ItemEntry{{Name: "minecraft:stone", RuntimeID: 1}}, MappingOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
