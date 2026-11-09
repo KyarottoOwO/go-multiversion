@@ -19,7 +19,7 @@ func marshalStructureBlockUpdate(io *wireIO, raw packet.Packet) {
 	pk.RedstoneSaveMode = uint8(redstoneMode)
 	io.Bool(&pk.ShouldTrigger)
 	if io.reading {
-		pk.FilteredStructureName = ""
+		pk.FilteredStructureName = protocol.Optional[string]{}
 		pk.Waterlogged = false
 	}
 }

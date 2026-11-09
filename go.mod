@@ -6,13 +6,13 @@ require (
 	github.com/df-mc/worldupgrader v1.0.22
 	github.com/go-gl/mathgl v1.1.0
 	github.com/google/uuid v1.6.0
-	github.com/sandertv/gophertunnel v1.62.0
+	github.com/sandertv/gophertunnel v1.63.1-0.20261030102901-0e179fc4bb08
 )
 
 require (
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
-	github.com/df-mc/go-nethernet v1.0.25 // indirect
+	github.com/df-mc/go-nethernet v1.0.26 // indirect
 	github.com/df-mc/go-playfab/v2 v2.0.2 // indirect
 	github.com/df-mc/go-xsapi/v2 v2.0.3 // indirect
 	github.com/df-mc/jsonc v1.0.5 // indirect
@@ -45,5 +45,3 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )
-
-replace github.com/sandertv/gophertunnel => github.com/MewishMC/gophertunnel v1.57.1-0.20261030212636-ae641c271f40

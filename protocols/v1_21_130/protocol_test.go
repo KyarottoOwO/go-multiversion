@@ -50,7 +50,7 @@ func wireFixtures() []packetFixture {
 		{name: "camera_instruction", new: func() packet.Packet {
 			return &packet.CameraInstruction{
 				FieldOfView: protocol.Option(protocol.CameraInstructionFieldOfView{FieldOfView: 80, EaseTime: 1, EaseType: protocol.EasingTypeInQuad}),
-				Spline:      protocol.Option(protocol.CameraSplineInstruction{TotalTime: 2, SplineType: protocol.Option(uint8(1)), Curve: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraProgressOption{{Value: 1, Time: 2, EaseType: protocol.EasingTypeOutQuad}}, RotationOptions: []protocol.CameraRotationOption{{Value: mgl32.Vec3{4, 5, 6}, Time: 3, EaseType: protocol.EasingTypeInOutQuad}}}),
+				Spline:      protocol.Option(protocol.CameraSplineInstruction{TotalTime: 2, SplineType: 1, Curve: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraProgressOption{{Value: 1, Time: 2, EaseType: protocol.EasingTypeOutQuad}}, RotationOptions: []protocol.CameraRotationOption{{Value: mgl32.Vec3{4, 5, 6}, Time: 3, EaseType: protocol.EasingTypeInOutQuad}}}),
 			}
 		}},
 		{name: "client_cache_blob_status", new: func() packet.Packet {

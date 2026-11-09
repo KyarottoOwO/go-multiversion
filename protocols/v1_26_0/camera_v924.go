@@ -36,7 +36,8 @@ func marshalCameraFieldOfView924(io *wireIO, value *protocol.CameraInstructionFi
 
 func marshalCameraSplineInstruction924(io *wireIO, value *protocol.CameraSplineInstruction) {
 	io.Float32(&value.TotalTime)
-	protocol.OptionalFunc(io.directional(), &value.SplineType, io.Uint8)
+	splineType := protocol.Option(value.SplineType)
+	protocol.OptionalFunc(io.directional(), &splineType, io.Uint8)
 	protocol.FuncSlice(io.directional(), &value.Curve, io.Vec3)
 	protocol.FuncIOSlice(io.directional(), &value.ProgressKeyFrames, func(raw protocol.IO, keyframe *protocol.CameraProgressOption) {
 		marshalCameraProgressOption924(asWireIO(raw), keyframe)
@@ -45,8 +46,9 @@ func marshalCameraSplineInstruction924(io *wireIO, value *protocol.CameraSplineI
 		marshalCameraRotationOption924(asWireIO(raw), option)
 	})
 	if io.reading {
-		value.SplineIdentifier = protocol.Optional[string]{}
-		value.LoadFromJson = protocol.Optional[bool]{}
+		value.SplineType, _ = splineType.Value()
+		value.SplineIdentifier = ""
+		value.LoadFromJson = false
 	}
 }
 
@@ -80,39 +82,60 @@ func marshalCameraRotationOption924(io *wireIO, value *protocol.CameraRotationOp
 	}
 }
 
+// marshalCameraSplineEase924 encodes the optional easing of a spline definition key frame, which protocol
+// 924 writes as an optional uint8 rather than by name.
+func marshalCameraSplineEase924(io *wireIO, easeType *protocol.Optional[int32]) {
+	var encoded protocol.Optional[uint8]
+	if value, ok := easeType.Value(); ok {
+		if value > protocol.EasingTypeInOutElastic {
+			value = protocol.EasingTypeLinear
+		}
+		encoded = protocol.Option(uint8(value))
+	}
+	protocol.OptionalFunc(io.directional(), &encoded, io.Uint8)
+	if io.reading {
+		*easeType = protocol.Optional[int32]{}
+		if value, ok := encoded.Value(); ok {
+			*easeType = protocol.Option(int32(value))
+		}
+	}
+}
+
 func marshalCameraSpline(io *wireIO, raw packet.Packet) {
 	pk := raw.(*packet.CameraSpline)
 	protocol.FuncIOSlice(io.directional(), &pk.Splines, func(raw protocol.IO, definition *protocol.CameraSplineDefinition) {
 		legacy := asWireIO(raw)
 		legacy.String(&definition.Name)
-		instruction := protocol.CameraSplineInstruction{
-			TotalTime:         definition.TotalTime,
-			Curve:             definition.ControlPoints,
-			ProgressKeyFrames: definition.ProgressKeyFrames,
-			RotationOptions:   definition.RotationKeyFrames,
+		legacy.Float32(&definition.TotalTime)
+		var splineType protocol.Optional[uint8]
+		switch definition.SplineType {
+		case "":
+		case protocol.SplineTypeLinear:
+			splineType = protocol.Option(uint8(1))
+		default:
+			splineType = protocol.Option(uint8(0))
 		}
-		if splineType, ok := definition.SplineType.Value(); ok {
-			switch splineType {
-			case protocol.SplineTypeLinear:
-				instruction.SplineType = protocol.Option(uint8(1))
-			default:
-				instruction.SplineType = protocol.Option(uint8(0))
-			}
-		}
-		marshalCameraSplineInstruction924(legacy, &instruction)
+		protocol.OptionalFunc(legacy.directional(), &splineType, legacy.Uint8)
+		protocol.FuncSlice(legacy.directional(), &definition.ControlPoints, legacy.Vec3)
+		protocol.FuncIOSlice(legacy.directional(), &definition.ProgressKeyFrames, func(raw protocol.IO, keyframe *protocol.CameraSplineProgressKeyFrame) {
+			w := asWireIO(raw)
+			w.Float32(&keyframe.Value)
+			w.Float32(&keyframe.Time)
+			marshalCameraSplineEase924(w, &keyframe.EaseType)
+		})
+		protocol.FuncIOSlice(legacy.directional(), &definition.RotationKeyFrames, func(raw protocol.IO, keyframe *protocol.CameraSplineRotationKeyFrame) {
+			w := asWireIO(raw)
+			w.Vec3(&keyframe.Value)
+			w.Float32(&keyframe.Time)
+			marshalCameraSplineEase924(w, &keyframe.EaseType)
+		})
 		if legacy.reading {
-			definition.TotalTime = instruction.TotalTime
-			definition.ControlPoints = instruction.Curve
-			definition.ProgressKeyFrames = instruction.ProgressKeyFrames
-			definition.RotationKeyFrames = instruction.RotationOptions
-			if splineType, ok := instruction.SplineType.Value(); ok {
-				if splineType == 1 {
-					definition.SplineType = protocol.Option(protocol.SplineTypeLinear)
-				} else {
-					definition.SplineType = protocol.Option(protocol.SplineTypeCatmullRom)
+			definition.SplineType = ""
+			if value, ok := splineType.Value(); ok {
+				definition.SplineType = protocol.SplineTypeCatmullRom
+				if value == 1 {
+					definition.SplineType = protocol.SplineTypeLinear
 				}
-			} else {
-				definition.SplineType = protocol.Optional[string]{}
 			}
 		}
 	})

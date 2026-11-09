@@ -270,7 +270,14 @@ func marshalStructureBlockUpdate(io *wireIO, raw packet.Packet) {
 	pk := raw.(*packet.StructureBlockUpdate)
 	io.BlockPos(&pk.Position)
 	io.String(&pk.StructureName)
-	io.String(&pk.FilteredStructureName)
+	filteredStructureName, _ := pk.FilteredStructureName.Value()
+	io.String(&filteredStructureName)
+	if io.reading {
+		pk.FilteredStructureName = protocol.Optional[string]{}
+		if filteredStructureName != "" {
+			pk.FilteredStructureName = protocol.Option(filteredStructureName)
+		}
+	}
 	io.String(&pk.DataField)
 	io.Bool(&pk.IncludePlayers)
 	io.Bool(&pk.ShowBoundingBox)

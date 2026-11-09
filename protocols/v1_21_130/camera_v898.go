@@ -57,9 +57,9 @@ func marshalCameraSplineInstruction898(io *wireIO, value *protocol.CameraSplineI
 		marshalCameraRotationOption898(asWireIO(raw), option)
 	})
 	if io.reading {
-		value.SplineType = protocol.Optional[uint8]{}
-		value.SplineIdentifier = protocol.Optional[string]{}
-		value.LoadFromJson = protocol.Optional[bool]{}
+		value.SplineType = 0
+		value.SplineIdentifier = ""
+		value.LoadFromJson = false
 	}
 }
 

@@ -367,6 +367,26 @@ func tryEncodeZeroValue(pk packet.Packet) (encoded []byte, ok bool) {
 	return buffer.Bytes(), true
 }
 
+func TestStructureBlockFilteredNameMapsToOptional(t *testing.T) {
+	for _, filtered := range []protocol.Optional[string]{{}, protocol.Option("filtered")} {
+		original := &packet.StructureBlockUpdate{StructureName: "name", FilteredStructureName: filtered}
+		encoded := encodeTargetPacket(t, original)
+		if original.FilteredStructureName != filtered {
+			t.Fatalf("conversion mutated input: got %#v, want %#v", original.FilteredStructureName, filtered)
+		}
+		decoded := Protocol{}.Packets(false)[original.ID()]()
+		buffer := bytes.NewBuffer(encoded)
+		decoded.Marshal(Protocol{}.NewReader(buffer, 0, true))
+		if buffer.Len() != 0 {
+			t.Fatalf("%d unread bytes", buffer.Len())
+		}
+		latest := Protocol{}.ConvertToLatest(decoded, nil)
+		if got := latest[0].(*packet.StructureBlockUpdate).FilteredStructureName; got != filtered {
+			t.Fatalf("filtered structure name: got %#v, want %#v", got, filtered)
+		}
+	}
+}
+
 func TestMixedPacketsAreSplit(t *testing.T) {
 	players := &packet.PlayerList{Entries: []protocol.PlayerListEntry{
 		{ActionType: protocol.PlayerListActionAdd},

@@ -50,11 +50,11 @@ func wireFixtures() []packetFixture {
 		{name: "camera_instruction", new: func() packet.Packet {
 			return &packet.CameraInstruction{
 				FieldOfView: protocol.Option(protocol.CameraInstructionFieldOfView{FieldOfView: 80, EaseTime: 1, EaseType: protocol.EasingTypeInQuad}),
-				Spline:      protocol.Option(protocol.CameraSplineInstruction{TotalTime: 2, SplineType: protocol.Option(uint8(1)), Curve: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraProgressOption{{Value: 1, Time: 2, EaseType: protocol.EasingTypeOutQuad}}, RotationOptions: []protocol.CameraRotationOption{{Value: mgl32.Vec3{4, 5, 6}, Time: 3, EaseType: protocol.EasingTypeInOutQuad}}}),
+				Spline:      protocol.Option(protocol.CameraSplineInstruction{TotalTime: 2, SplineType: 1, Curve: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraProgressOption{{Value: 1, Time: 2, EaseType: protocol.EasingTypeOutQuad}}, RotationOptions: []protocol.CameraRotationOption{{Value: mgl32.Vec3{4, 5, 6}, Time: 3, EaseType: protocol.EasingTypeInOutQuad}}}),
 			}
 		}},
 		{name: "camera_spline", new: func() packet.Packet {
-			return &packet.CameraSpline{Splines: []protocol.CameraSplineDefinition{{Name: "path", TotalTime: 2, SplineType: protocol.Option(protocol.SplineTypeLinear), ControlPoints: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraProgressOption{{Value: 1, Time: 2}}, RotationKeyFrames: []protocol.CameraRotationOption{{Value: mgl32.Vec3{4, 5, 6}, Time: 3}}}}}
+			return &packet.CameraSpline{Splines: []protocol.CameraSplineDefinition{{Name: "path", TotalTime: 2, SplineType: protocol.SplineTypeLinear, ControlPoints: []mgl32.Vec3{{1, 2, 3}}, ProgressKeyFrames: []protocol.CameraSplineProgressKeyFrame{{Value: 1, Time: 2, EaseType: protocol.Option(int32(protocol.EasingTypeOutQuad))}}, RotationKeyFrames: []protocol.CameraSplineRotationKeyFrame{{Value: mgl32.Vec3{4, 5, 6}, Time: 3}}}}}
 		}},
 		{name: "client_bound_data_driven_ui_close_screen", new: func() packet.Packet {
 			return &packet.ClientBoundDataDrivenUICloseScreen{}
