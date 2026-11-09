@@ -25,12 +25,33 @@ type BlockState struct {
 	Version    int32
 }
 
-// BlockFallback records one native state that protocol 1001 cannot represent.
+// BlockFallback records one native state that protocol 1001 cannot represent
+// exactly. TargetRuntimeID is the historical air state unless an opt-in
+// substitution resolved another target state.
 type BlockFallback struct {
 	NativeRuntimeID uint32
 	Name            string
 	Properties      map[string]any
 	TargetRuntimeID uint32
+}
+
+// BlockSubstitution maps a native block name that the historical protocol
+// cannot represent onto a target state. CopyProperties lists the native
+// property names carried to the target; every other property is dropped.
+// Substituted states remain non-exact so item and inventory conversion keeps
+// rejecting them; only block rendering uses the substitute.
+type BlockSubstitution struct {
+	Source         string
+	Target         string
+	CopyProperties []string
+}
+
+// BlockMapperOptions configures opt-in mapping behaviour.
+type BlockMapperOptions struct {
+	// Substitutions are applied only to native states that have no exact target.
+	// Every target is resolved in the loaded historical palette. A missing
+	// target, or a missing CopyProperties value, leaves the air fallback.
+	Substitutions []BlockSubstitution
 }
 
 // BlockMapper maps current native runtime IDs directly to historical target
@@ -44,13 +65,14 @@ type BlockMapper struct {
 	targetByKey    map[string]uint32
 	fallbacks      []BlockFallback
 	targetAir      uint32
+	substituted    int
 }
 
 // NewBlockMapper builds an immutable direct mapping. Historical states are
 // ordered using the stable name-only FNV-1 sort used by recent Dragonfly block
 // registries before their runtime IDs are assigned.
 func NewBlockMapper(native BlockRegistry, historical []BlockState) (*BlockMapper, error) {
-	return newBlockMapper(native, historical, true)
+	return newBlockMapper(native, historical, true, BlockMapperOptions{})
 }
 
 // NewBlockMapperWithTargetOrder builds an immutable direct mapping while
@@ -58,10 +80,16 @@ func NewBlockMapper(native BlockRegistry, historical []BlockState) (*BlockMapper
 // It is used by releases whose Dragonfly registry registered the embedded NBT
 // stream directly without a final sorting pass.
 func NewBlockMapperWithTargetOrder(native BlockRegistry, historical []BlockState) (*BlockMapper, error) {
-	return newBlockMapper(native, historical, false)
+	return newBlockMapper(native, historical, false, BlockMapperOptions{})
 }
 
-func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bool) (*BlockMapper, error) {
+// NewBlockMapperWithTargetOrderAndOptions builds an order-preserving mapping
+// with opt-in substitutions for native states the target cannot represent.
+func NewBlockMapperWithTargetOrderAndOptions(native BlockRegistry, historical []BlockState, options BlockMapperOptions) (*BlockMapper, error) {
+	return newBlockMapper(native, historical, false, options)
+}
+
+func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bool, options BlockMapperOptions) (*BlockMapper, error) {
 	if native == nil {
 		return nil, fmt.Errorf("native block registry is nil")
 	}
@@ -223,17 +251,38 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 			nativeToTarget[nativeRuntimeID], nativeExact[nativeRuntimeID] = uint32(targetRuntimeID), true
 		}
 	}
+
+	// Opt-in substitutions still count as non-exact. They only change the
+	// runtime ID used for block rendering; item conversion continues to see the
+	// state as unrepresentable.
+	substituted := make(map[uint32]uint32, len(options.Substitutions))
+	for runtimeID := range nativeExact {
+		if nativeExact[runtimeID] {
+			continue
+		}
+		target, ok := substituteTarget(nativeStates[runtimeID], options.Substitutions, targetByKey)
+		if !ok {
+			continue
+		}
+		nativeToTarget[runtimeID] = target
+		substituted[uint32(runtimeID)] = target
+	}
+
 	fallbacks := make([]BlockFallback, 0)
 	for runtimeID, exact := range nativeExact {
 		if exact {
 			continue
 		}
 		state := nativeStates[runtimeID]
+		target := targetAir
+		if substitute, ok := substituted[uint32(runtimeID)]; ok {
+			target = substitute
+		}
 		fallbacks = append(fallbacks, BlockFallback{
 			NativeRuntimeID: uint32(runtimeID),
 			Name:            state.Name,
 			Properties:      internProperties(state.Properties),
-			TargetRuntimeID: targetAir,
+			TargetRuntimeID: target,
 		})
 	}
 
@@ -246,6 +295,7 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 		targetByKey:    targetByKey,
 		fallbacks:      fallbacks,
 		targetAir:      targetAir,
+		substituted:    len(substituted),
 	}, nil
 }
 
@@ -323,7 +373,8 @@ func (m *BlockMapper) TargetStates() []BlockState {
 	return states
 }
 
-// Fallbacks returns every native state substituted with historical air.
+// Fallbacks returns every native state without an exact target. Entries use
+// historical air unless an opt-in substitution resolved a target state.
 func (m *BlockMapper) Fallbacks() []BlockFallback {
 	if m == nil {
 		return nil
@@ -334,6 +385,15 @@ func (m *BlockMapper) Fallbacks() []BlockFallback {
 		fallbacks[index].Properties = cloneProperties(fallback.Properties)
 	}
 	return fallbacks
+}
+
+// SubstitutedCount returns the number of native states mapped through an
+// opt-in substitution.
+func (m *BlockMapper) SubstitutedCount() int {
+	if m == nil {
+		return 0
+	}
+	return m.substituted
 }
 
 // TargetAir returns the protocol-1001 air runtime ID.
@@ -358,6 +418,38 @@ func (m *BlockMapper) TargetCount() int {
 		return 0
 	}
 	return len(m.targetToNative)
+}
+
+// substituteTarget resolves the historical target state for one native state.
+// Targets are never synthesised: the complete copied state must exist in the
+// loaded palette.
+func substituteTarget(state BlockState, substitutions []BlockSubstitution, targetByKey map[string]uint32) (uint32, bool) {
+	for _, substitution := range substitutions {
+		if substitution.Source != state.Name || substitution.Target == "" {
+			continue
+		}
+		properties := make(map[string]any, len(substitution.CopyProperties))
+		complete := true
+		for _, name := range substitution.CopyProperties {
+			value, ok := state.Properties[name]
+			if !ok {
+				complete = false
+				break
+			}
+			properties[name] = value
+		}
+		if !complete {
+			continue
+		}
+		key, err := StateKey(substitution.Target, properties)
+		if err != nil {
+			continue
+		}
+		if target, ok := targetByKey[key]; ok {
+			return target, true
+		}
+	}
+	return 0, false
 }
 
 func cloneProperties(properties map[string]any) map[string]any {

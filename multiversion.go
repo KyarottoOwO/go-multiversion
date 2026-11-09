@@ -252,6 +252,12 @@ func ProtocolsWithBlockRegistry(native mapping.BlockRegistry) ([]minecraft.Proto
 // ProtocolsWithRegistries returns all verified adapters after eagerly
 // validating the current block and item registries.
 func ProtocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry) ([]minecraft.Protocol, error) {
+	return protocolsWithRegistries(native, nativeItems, nil)
+}
+
+// protocolsWithRegistries builds the catalogue with opt-in protocol-419 block
+// substitutions. The package-level constructor always keeps the air fallback.
+func protocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry, blockSubstitutions419 []mapping.BlockSubstitution) ([]minecraft.Protocol, error) {
 	u50, err := v1_26_50.NewWithRegistries(native, nativeItems)
 	if err != nil {
 		return nil, err
@@ -308,7 +314,7 @@ func ProtocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protoco
 	if err != nil {
 		return nil, err
 	}
-	v419, err := v1_16_100.NewWithRegistries(native, nativeItems)
+	v419, err := v1_16_100.NewWithRegistriesAndOptions(native, nativeItems, v1_16_100.MappingOptions{BlockSubstitutions: blockSubstitutions419})
 	if err != nil {
 		return nil, err
 	}

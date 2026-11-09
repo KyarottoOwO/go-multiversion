@@ -24,6 +24,14 @@ type Protocol struct {
 	runtime *runtimeData
 }
 
+// MappingOptions configures opt-in protocol-419 registry mapping.
+type MappingOptions struct {
+	// BlockSubstitutions render native block states that the 1.16.100 palette
+	// cannot represent with older target states. Empty keeps the air fallback.
+	// Substituted states remain non-exact so item conversion rejects them.
+	BlockSubstitutions []mapping.BlockSubstitution
+}
+
 type MappingReport struct {
 	NativeBlocks, TargetBlocks int
 	NativeItems, TargetItems   int
@@ -31,6 +39,7 @@ type MappingReport struct {
 	ItemFallbacks              []mapping.ItemFallback
 	TargetItemFallbacks        []mapping.TargetItemFallback
 	CreativeItems              int
+	SubstitutedFallbacks       int
 }
 
 type fallbackProperty struct {
@@ -53,7 +62,14 @@ func NewWithBlockRegistry(native mapping.BlockRegistry) (minecraft.Protocol, err
 }
 
 func NewWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry) (minecraft.Protocol, error) {
-	runtime, err := newRuntimeData(native, nativeItems)
+	return NewWithRegistriesAndOptions(native, nativeItems, MappingOptions{})
+}
+
+// NewWithRegistriesAndOptions configures the adapter with opt-in mapping
+// options. Block substitutions only affect block rendering; item and inventory
+// conversion continues to treat substituted states as unrepresentable.
+func NewWithRegistriesAndOptions(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry, options MappingOptions) (minecraft.Protocol, error) {
+	runtime, err := newRuntimeData(native, nativeItems, options)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +124,11 @@ func (p Protocol) MappingReport() MappingReport {
 		return MappingReport{}
 	}
 	report := MappingReport{
-		NativeBlocks:   p.runtime.blocks.NativeCount(),
-		TargetBlocks:   p.runtime.blocks.TargetCount(),
-		BlockFallbacks: p.runtime.blocks.Fallbacks(),
-		CreativeItems:  p.runtime.creativeCount,
+		NativeBlocks:         p.runtime.blocks.NativeCount(),
+		TargetBlocks:         p.runtime.blocks.TargetCount(),
+		BlockFallbacks:       p.runtime.blocks.Fallbacks(),
+		CreativeItems:        p.runtime.creativeCount,
+		SubstitutedFallbacks: p.runtime.blocks.SubstitutedCount(),
 	}
 	if items := p.runtime.currentItemMapper(); items != nil {
 		report.NativeItems = items.NativeCount()
@@ -120,6 +137,13 @@ func (p Protocol) MappingReport() MappingReport {
 		report.TargetItemFallbacks = items.TargetFallbacks()
 	}
 	return report
+}
+
+func blockFallbackPolicy(substituted int) string {
+	if substituted > 0 {
+		return "substitute minecraft:air or configured target"
+	}
+	return "substitute minecraft:air"
 }
 
 func (p Protocol) FallbackReportJSON(nativeDragonflyCommit, targetDragonflyCommit string) ([]byte, error) {
@@ -142,7 +166,7 @@ func (p Protocol) FallbackReportJSON(nativeDragonflyCommit, targetDragonflyCommi
 		"schema_version":          1,
 		"native_dragonfly_commit": nativeDragonflyCommit,
 		"target_dragonfly_commit": targetDragonflyCommit,
-		"block_policy":            "substitute minecraft:air",
+		"block_policy":            blockFallbackPolicy(report.SubstitutedFallbacks),
 		"item_policy":             "hide clientbound and reject serverbound",
 		"block_fallbacks":         blocks,
 		"item_fallbacks":          report.ItemFallbacks,

@@ -21,7 +21,7 @@ type runtimeData struct {
 	items   *mapping.ItemMapper
 }
 
-func newRuntimeData(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry) (*runtimeData, error) {
+func newRuntimeData(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry, options MappingOptions) (*runtimeData, error) {
 	historicalStates, err := v419.BlockStates()
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func newRuntimeData(native mapping.BlockRegistry, nativeItems []protocol.ItemEnt
 	for index, state := range historicalStates {
 		states[index] = mapping.BlockState{Name: state.Name, Properties: state.Properties, Version: state.Version}
 	}
-	blocks, err := mapping.NewBlockMapperWithTargetOrder(native, states)
+	blocks, err := mapping.NewBlockMapperWithTargetOrderAndOptions(native, states, mapping.BlockMapperOptions{Substitutions: options.BlockSubstitutions})
 	if err != nil {
 		return nil, fmt.Errorf("build block mapping: %w", err)
 	}
