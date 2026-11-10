@@ -16,7 +16,7 @@ type Mapper func(uint32) (uint32, bool)
 
 // SubChunk maps one version-9 sub-chunk and preserves the trailing block NBT.
 func SubChunk(data []byte, blocks Mapper) ([]byte, error) {
-	r, w := bytes.NewReader(data), new(bytes.Buffer)
+	r, w := bytes.NewReader(data), bytes.NewBuffer(make([]byte, 0, len(data)))
 	if err := subChunk(r, w, blocks); err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func LevelChunk(data []byte, count uint32, sections int, blocks, biomes Mapper) 
 	if sections < 1 || sections > 64 || count > uint32(sections) {
 		return nil, fmt.Errorf("invalid chunk dimensions: %d sub-chunks, %d biome sections", count, sections)
 	}
-	r, w := bytes.NewReader(data), new(bytes.Buffer)
+	r, w := bytes.NewReader(data), bytes.NewBuffer(make([]byte, 0, len(data)))
 	for range count {
 		if err := subChunk(r, w, blocks); err != nil {
 			return nil, err
@@ -65,6 +65,14 @@ func subChunk(r *bytes.Reader, w *bytes.Buffer, blocks Mapper) error {
 	return nil
 }
 
+// inlinePaletteCount is the number of distinct palette values resolved with a
+// linear scan before a map takes over. Real sub-chunk palettes are small, so the
+// scan avoids one map allocation per palette; larger palettes still use a map.
+const inlinePaletteCount = 32
+
+// palette translates one version-9 block or biome palette. The index words are
+// walked word by word: a packed field never spans two words, so the destination
+// bit position can be advanced instead of divided per cell.
 func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 	header, err := r.ReadByte()
 	if err != nil {
@@ -78,10 +86,10 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 	if header&1 == 0 || !validBits(bits) {
 		return fmt.Errorf("invalid network palette header %d", header)
 	}
-	var words []uint32
+	var words []byte
 	if bits != 0 {
-		words = make([]uint32, (4096+32/bits-1)/(32/bits))
-		if err := binary.Read(r, binary.LittleEndian, words); err != nil {
+		words = make([]byte, (4096+32/bits-1)/(32/bits)*4)
+		if _, err := io.ReadFull(r, words); err != nil {
 			return err
 		}
 	}
@@ -94,8 +102,18 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 	if count < 1 || count > 4096 || (bits != 0 && count > 1<<bits) {
 		return fmt.Errorf("invalid palette length %d", count)
 	}
-	remap, values := make([]uint32, count), make([]uint32, 0, count)
-	indices := make(map[uint32]uint32, count)
+	remap := make([]uint32, count)
+	var (
+		inlineTable [inlinePaletteCount]uint32
+		values      = inlineTable[:0]
+		indices     map[uint32]uint32
+		identity    = true
+	)
+	if count > inlinePaletteCount {
+		// A large palette would grow the inline table several times before the
+		// map takes over. Size it exactly once instead.
+		values = make([]uint32, 0, count)
+	}
 	for i := range remap {
 		var value int32
 		if err := protocol.Varint32(r, &value); err != nil {
@@ -105,11 +123,34 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 		if !ok {
 			return fmt.Errorf("unknown palette ID %d", uint32(value))
 		}
-		index, exists := indices[mapped]
-		if !exists {
+		if mapped != uint32(value) {
+			identity = false
+		}
+		index, found := uint32(0), false
+		if indices != nil {
+			index, found = indices[mapped]
+		} else {
+			for k := range values {
+				if values[k] == mapped {
+					index, found = uint32(k), true
+					break
+				}
+			}
+		}
+		if !found {
 			index = uint32(len(values))
-			indices[mapped] = index
 			values = append(values, mapped)
+			switch {
+			case indices != nil:
+				indices[mapped] = index
+			case len(values) > len(inlineTable):
+				// The inline table overflowed once. Keep resolving through a map
+				// rather than scanning a long slice for every remaining entry.
+				indices = make(map[uint32]uint32, len(values))
+				for k, existing := range values {
+					indices[existing] = uint32(k)
+				}
+			}
 		}
 		remap[i] = index
 	}
@@ -120,20 +161,49 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 			break
 		}
 	}
+	// An identity remap that keeps the width changes no cell and no palette
+	// entry, so the bytes already read are the bytes to emit. Out-of-range cell
+	// indices must still be rejected exactly as the repacking path rejects them.
+	if identity && len(values) == int(count) && newBits == bits {
+		if bits != 0 && int(count) != 1<<uint(bits) {
+			if err := validatePaletteCells(words, bits, 0, uint32(len(remap))); err != nil {
+				return err
+			}
+		}
+		w.WriteByte(header)
+		w.Write(words)
+		if bits != 0 {
+			_ = protocol.WriteVarint32(w, count)
+		}
+		for _, value := range values {
+			_ = protocol.WriteVarint32(w, int32(value))
+		}
+		return nil
+	}
 	var packed []uint32
 	if newBits != 0 {
 		packed = make([]uint32, (4096+32/newBits-1)/(32/newBits))
 	}
-	for cell := range 4096 {
-		old := uint32(0)
-		if bits != 0 {
-			old = (words[cell/(32/bits)] >> (uint(cell%(32/bits)) * uint(bits))) & ((1 << bits) - 1)
-		}
-		if old >= uint32(len(remap)) {
-			return fmt.Errorf("palette index %d outside length %d", old, len(remap))
-		}
-		if newBits != 0 {
-			packed[cell/(32/newBits)] |= remap[old] << (uint(cell%(32/newBits)) * uint(newBits))
+	if bits != 0 {
+		mask := uint32(1)<<uint(bits) - 1
+		cellsPerWord := 32 / bits
+		outWord, outOffset, cell := 0, uint(0), 0
+		for offset := 0; offset < len(words) && cell < 4096; offset += 4 {
+			word := binary.LittleEndian.Uint32(words[offset:])
+			for k := 0; k < cellsPerWord && cell < 4096; k++ {
+				old := word >> (uint(k) * uint(bits)) & mask
+				if old >= uint32(len(remap)) {
+					return fmt.Errorf("palette index %d outside length %d", old, len(remap))
+				}
+				if newBits != 0 {
+					packed[outWord] |= remap[old] << outOffset
+					outOffset += uint(newBits)
+					if outOffset+uint(newBits) > 32 {
+						outWord, outOffset = outWord+1, 0
+					}
+				}
+				cell++
+			}
 		}
 	}
 	w.WriteByte(byte(newBits<<1 | 1))
@@ -143,6 +213,25 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 	}
 	for _, value := range values {
 		_ = protocol.WriteVarint32(w, int32(value))
+	}
+	return nil
+}
+
+// validatePaletteCells reports the first cell index that the palette cannot
+// represent. Cells stored in the padding bits after the last real cell of a
+// padded palette (3, 5 and 6 bits per index) are not part of the payload.
+func validatePaletteCells(words []byte, bits int, first, limit uint32) error {
+	mask := uint32(1)<<uint(bits) - 1
+	cellsPerWord := 32 / bits
+	cell := first
+	for offset := 0; offset < len(words) && cell < 4096; offset += 4 {
+		word := binary.LittleEndian.Uint32(words[offset:])
+		for k := 0; k < cellsPerWord && cell < 4096; k++ {
+			if old := word >> (uint(k) * uint(bits)) & mask; old >= limit {
+				return fmt.Errorf("palette index %d outside length %d", old, limit)
+			}
+			cell++
+		}
 	}
 	return nil
 }
