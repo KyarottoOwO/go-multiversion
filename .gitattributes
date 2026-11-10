@@ -13,3 +13,5 @@
 /tools/extract_native2225/** text eol=lf
 # Version-specific BDS catalog copies retain their upstream checksum bytes.
 /versions/*-bds.json -text
+
+/testdata/*.json text eol=lf

@@ -13,12 +13,13 @@ import (
 
 // This opt-in build requires the documented gophertunnel legacy transport fork.
 func appendLegacyProtocols(modern []minecraft.Protocol, blocks mapping.BlockRegistry, items []protocol.ItemEntry) ([]minecraft.Protocol, error) {
-	for _, construct := range []func(mapping.BlockRegistry, []protocol.ItemEntry) (minecraft.Protocol, error){v1_18_10.NewWithRegistries, v1_18_0.NewWithRegistries, v1_16_100.NewWithRegistries} {
-		p, err := construct(blocks, items)
-		if err != nil {
-			return nil, err
-		}
-		modern = append(modern, p)
+	legacy, err := buildProtocols([]protocolBuilder{
+		{v1_18_10.ID, func() (minecraft.Protocol, error) { return v1_18_10.NewWithRegistries(blocks, items) }},
+		{v1_18_0.ID, func() (minecraft.Protocol, error) { return v1_18_0.NewWithRegistries(blocks, items) }},
+		{v1_16_100.ID, func() (minecraft.Protocol, error) { return v1_16_100.NewWithRegistries(blocks, items) }},
+	}, 0)
+	if err != nil {
+		return nil, err
 	}
-	return modern, nil
+	return append(modern, legacy...), nil
 }

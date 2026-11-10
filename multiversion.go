@@ -3,6 +3,8 @@
 package multiversion
 
 import (
+	"sync"
+
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/shawtymarco/go-multiversion/mapping"
@@ -28,6 +30,44 @@ import (
 // so consumers must use ProtocolsWithRegistries to enable older clients.
 func Protocols() []minecraft.Protocol {
 	return nil
+}
+
+// protocolBuilder is one catalogue slot. Builders are declared in serving
+// order because the returned adapter order is part of the public contract.
+type protocolBuilder struct {
+	id    int32
+	build func() (minecraft.Protocol, error)
+}
+
+// buildProtocols constructs the builders at or above floor concurrently and
+// returns the adapters in declaration order. The first construction error in
+// catalogue order is returned, so a failing adapter still fails the whole
+// catalogue for every adapter the floor asks for. Adapters below the floor are
+// never constructed, which is why a floor can no longer surface their errors.
+func buildProtocols(builders []protocolBuilder, floor int32) ([]minecraft.Protocol, error) {
+	selected := builders[:0:0]
+	for _, builder := range builders {
+		if builder.id >= floor {
+			selected = append(selected, builder)
+		}
+	}
+	protocols := make([]minecraft.Protocol, len(selected))
+	errs := make([]error, len(selected))
+	var wg sync.WaitGroup
+	wg.Add(len(selected))
+	for i := range selected {
+		go func() {
+			defer wg.Done()
+			protocols[i], errs[i] = selected[i].build()
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return protocols, nil
 }
 
 // V1_26_50 returns the wire-only protocol-2193 adapter. Gameplay consumers
@@ -187,55 +227,23 @@ func V1_21_130WithBlockRegistry(native mapping.BlockRegistry) (minecraft.Protoco
 // against the current block registry. The legacytransport build adds 419/475/486
 // and requires the separately documented transport fork.
 func ProtocolsWithBlockRegistry(native mapping.BlockRegistry) ([]minecraft.Protocol, error) {
-	u50, err := v1_26_50.NewWithBlockRegistry(native)
+	modern, err := buildProtocols([]protocolBuilder{
+		{v1_26_44.ID, func() (minecraft.Protocol, error) { return v1_26_44.NewWithBlockRegistry(native) }},
+		{v1_26_30.ID, func() (minecraft.Protocol, error) { return v1_26_30.NewWithBlockRegistry(native) }},
+		{v1_26_20.ID, func() (minecraft.Protocol, error) { return v1_26_20.NewWithBlockRegistry(native) }},
+		{v1_26_10.ID, func() (minecraft.Protocol, error) { return v1_26_10.NewWithBlockRegistry(native) }},
+		{v1_26_0.ID, func() (minecraft.Protocol, error) { return v1_26_0.NewWithBlockRegistry(native) }},
+		{v1_21_130.ID, func() (minecraft.Protocol, error) { return v1_21_130.NewWithBlockRegistry(native) }},
+		{v1_21_110.ID, func() (minecraft.Protocol, error) { return v1_21_110.NewWithBlockRegistry(native) }},
+		{v1_21_100.ID, func() (minecraft.Protocol, error) { return v1_21_100.NewWithBlockRegistry(native) }},
+		{v1_21_50.ID, func() (minecraft.Protocol, error) { return v1_21_50.NewWithBlockRegistry(native) }},
+		{v1_21_40.ID, func() (minecraft.Protocol, error) { return v1_21_40.NewWithBlockRegistry(native) }},
+		{v1_26_45.ID, func() (minecraft.Protocol, error) { return v1_26_45.NewWithBlockRegistry(native) }},
+		{v1_26_50.ID, func() (minecraft.Protocol, error) { return v1_26_50.NewWithBlockRegistry(native) }},
+	}, 0)
 	if err != nil {
 		return nil, err
 	}
-	u45, err := v1_26_45.NewWithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	u44, err := v1_26_44.NewWithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	legacy, err := V1_26_30WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	u2, err := V1_26_20WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	u1, err := V1_26_10WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	u0, err := V1_26_0WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	r21u13, err := V1_21_130WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	older, err := V1_21_110WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	oldest, err := V1_21_100WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	r21u5, err := V1_21_50WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	r21u4, err := V1_21_40WithBlockRegistry(native)
-	if err != nil {
-		return nil, err
-	}
-	modern := []minecraft.Protocol{u44, legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, u45, u50}
 	return appendLegacyProtocols(modern, native, nil)
 }
 
@@ -243,73 +251,32 @@ func ProtocolsWithBlockRegistry(native mapping.BlockRegistry) ([]minecraft.Proto
 // validating the current block and item registries. By default it includes
 // protocol 748 and newer; legacytransport adds the Login-first families.
 func ProtocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry) ([]minecraft.Protocol, error) {
-	return protocolsWithRegistries(native, nativeItems, nil)
+	return protocolsWithRegistries(native, nativeItems, nil, 0)
 }
 
 // protocolsWithRegistries builds the catalogue with opt-in protocol-419 block
-// substitutions. The package-level constructor always keeps the air fallback.
-func protocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry, blockSubstitutions419 []mapping.BlockSubstitution) ([]minecraft.Protocol, error) {
-	u50, err := v1_26_50.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	u45, err := v1_26_45.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	u44, err := v1_26_44.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	legacy, err := v1_26_30.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	u2, err := v1_26_20.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	u1, err := v1_26_10.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	u0, err := v1_26_0.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	r21u13, err := v1_21_130.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	older, err := v1_21_110.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	oldest, err := v1_21_100.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	r21u5, err := v1_21_50.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	r21u4, err := v1_21_40.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	v486, err := v1_18_10.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	v475, err := v1_18_0.NewWithRegistries(native, nativeItems)
-	if err != nil {
-		return nil, err
-	}
-	v419, err := v1_16_100.NewWithRegistriesAndOptions(native, nativeItems, v1_16_100.MappingOptions{BlockSubstitutions: blockSubstitutions419})
-	if err != nil {
-		return nil, err
-	}
-	return []minecraft.Protocol{u44, legacy, u2, u1, u0, r21u13, older, oldest, r21u5, r21u4, v486, v475, v419, u45, u50}, nil
+// substitutions. Adapters below minimumProtocol are never constructed. The
+// package-level constructor always keeps the air fallback.
+func protocolsWithRegistries(native mapping.BlockRegistry, nativeItems []protocol.ItemEntry, blockSubstitutions419 []mapping.BlockSubstitution, minimumProtocol int32) ([]minecraft.Protocol, error) {
+	return buildProtocols([]protocolBuilder{
+		{v1_26_44.ID, func() (minecraft.Protocol, error) { return v1_26_44.NewWithRegistries(native, nativeItems) }},
+		{v1_26_30.ID, func() (minecraft.Protocol, error) { return v1_26_30.NewWithRegistries(native, nativeItems) }},
+		{v1_26_20.ID, func() (minecraft.Protocol, error) { return v1_26_20.NewWithRegistries(native, nativeItems) }},
+		{v1_26_10.ID, func() (minecraft.Protocol, error) { return v1_26_10.NewWithRegistries(native, nativeItems) }},
+		{v1_26_0.ID, func() (minecraft.Protocol, error) { return v1_26_0.NewWithRegistries(native, nativeItems) }},
+		{v1_21_130.ID, func() (minecraft.Protocol, error) { return v1_21_130.NewWithRegistries(native, nativeItems) }},
+		{v1_21_110.ID, func() (minecraft.Protocol, error) { return v1_21_110.NewWithRegistries(native, nativeItems) }},
+		{v1_21_100.ID, func() (minecraft.Protocol, error) { return v1_21_100.NewWithRegistries(native, nativeItems) }},
+		{v1_21_50.ID, func() (minecraft.Protocol, error) { return v1_21_50.NewWithRegistries(native, nativeItems) }},
+		{v1_21_40.ID, func() (minecraft.Protocol, error) { return v1_21_40.NewWithRegistries(native, nativeItems) }},
+		{v1_18_10.ID, func() (minecraft.Protocol, error) { return v1_18_10.NewWithRegistries(native, nativeItems) }},
+		{v1_18_0.ID, func() (minecraft.Protocol, error) { return v1_18_0.NewWithRegistries(native, nativeItems) }},
+		{v1_16_100.ID, func() (minecraft.Protocol, error) {
+			return v1_16_100.NewWithRegistriesAndOptions(native, nativeItems, v1_16_100.MappingOptions{BlockSubstitutions: blockSubstitutions419})
+		}},
+		{v1_26_45.ID, func() (minecraft.Protocol, error) { return v1_26_45.NewWithRegistries(native, nativeItems) }},
+		{v1_26_50.ID, func() (minecraft.Protocol, error) { return v1_26_50.NewWithRegistries(native, nativeItems) }},
+	}, minimumProtocol)
 }
 
 // V1_26_44 returns the Minecraft protocol 2168 family adapter. The adapter

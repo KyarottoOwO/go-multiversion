@@ -36,7 +36,7 @@ func (c Config) ProtocolsWithRegistries(native mapping.BlockRegistry, items []pr
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	protocols, err := protocolsWithRegistries(native, items, c.BlockSubstitutions419)
+	protocols, err := protocolsWithRegistries(native, items, c.BlockSubstitutions419, c.MinimumProtocol)
 	if err != nil {
 		return nil, err
 	}
