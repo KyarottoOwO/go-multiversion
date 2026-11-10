@@ -3,13 +3,15 @@
 package v1_26_50
 
 import (
+	"strings"
+	"sync"
+
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 	v2193 "github.com/shawtymarco/go-multiversion/data/v2193"
 	"github.com/shawtymarco/go-multiversion/internal/packetio"
 	"github.com/shawtymarco/go-multiversion/mapping"
-	"strings"
 )
 
 const (
@@ -99,6 +101,36 @@ func (Protocol) NewWriter(w minecraft.ByteWriter, shieldID int32) protocol.IO {
 	return &writer{protocol.NewWriter(w, shieldID)}
 }
 
+// blockDefinitions shares one decode of the frozen 2193 vanilla block
+// components. StartGame conversion runs for every joining player and the
+// embedded NBT is roughly 80 KB, so decoding it per join repeated identical
+// immutable work. The decoded values must be treated as read-only.
+var blockDefinitions = sync.OnceValues(v2193.BlockDefinitions)
+
+// startGameBlocks places the 2193 vanilla components before the caller's custom
+// blocks, which are the entries that are not in the minecraft: namespace. The
+// shared vanilla slice is returned unchanged when no custom block exists, so
+// only the appended form is copied.
+func startGameBlocks(current, definitions []protocol.BlockEntry) []protocol.BlockEntry {
+	custom := 0
+	for _, block := range current {
+		if !strings.HasPrefix(block.Name, "minecraft:") {
+			custom++
+		}
+	}
+	if custom == 0 {
+		return definitions
+	}
+	blocks := make([]protocol.BlockEntry, len(definitions), len(definitions)+custom)
+	copy(blocks, definitions)
+	for _, block := range current {
+		if !strings.HasPrefix(block.Name, "minecraft:") {
+			blocks = append(blocks, block)
+		}
+	}
+	return blocks
+}
+
 func (p Protocol) ConvertToLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
 	return p.convertGameplayToLatest(UnwrapWirePacket(pk), conn)
 }
@@ -111,16 +143,11 @@ func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []pa
 		copy.GameVersion, copy.BaseGameVersion = Version, Version
 		copy.UseBlockNetworkIDHashes = false
 		if p.runtime != nil {
-			definitions, err := v2193.BlockDefinitions()
+			definitions, err := blockDefinitions()
 			if err != nil {
 				return nil
 			}
-			copy.Blocks = definitions
-			for _, block := range start.Blocks {
-				if !strings.HasPrefix(block.Name, "minecraft:") {
-					copy.Blocks = append(copy.Blocks, block)
-				}
-			}
+			copy.Blocks = startGameBlocks(start.Blocks, definitions)
 		}
 		pk = &copy
 	}
