@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 04:50
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:00
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 | # | Version(s) | What went wrong (1 line) | Why (1 line) | Fix commit | Status |
@@ -40,6 +40,8 @@ Environment note: this machine sets `GOFLAGS=-tags=legacytransport` globally, wh
 - `TestConversionNoPanicSweep`: every native packet is converted in both directions, and every clientbound result must be writable by the target pool. Packets whose zero value the native pool cannot write either are skipped.
 - `TestSampleRoundTrip`: 40 realistic packets (StartGame, item registry, creative content, recipes, chunks, player list/skin, actors, metadata, sounds, text, book edit, camera, scoreboard, transactions) go through conversion, target encoding, target decoding and back. The native packet must not change, the caller's input must not be mutated, and a second cycle must produce the same native packet.
 - `TestDecoderTruncationSweep`: every pool entry is decoded from bounded truncated prefixes; truncation must never crash.
+
+Two fuzz targets cover the same surface: `FuzzAdapterDecode` feeds arbitrary bytes to every adapter decoder and `FuzzConversionRoundTrip` converts whatever decodes. Run them with a fixed budget, for example `go test ./internal/compat -run XXX -fuzz=FuzzConversionRoundTrip -fuzztime=10m -parallel=2`; the reduced parallelism keeps 20 fuzz workers from exhausting memory on this machine.
 
 Two documented exceptions live in the harness: `ItemRegistry` is clientbound-only, so adapters do not convert it back, and 419/486 deliberately drop `CraftingData` (their retail clients keep built-in recipes and crash on the current catalogue).
 

@@ -33,7 +33,7 @@ type sample struct {
 	droppedFor map[int32]string
 }
 
-func samples(t *testing.T) []sample {
+func samples(t testing.TB) []sample {
 	t.Helper()
 	blocks, err := native.BlockDefinitions()
 	if err != nil {
