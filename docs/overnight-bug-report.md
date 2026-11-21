@@ -1,9 +1,28 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:35
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:50
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
-| # | Version(s) | What went wrong (1 line) | Why (1 line) | Fix commit | Status |
+## Morning summary
+
+Finished: 2026-11-21 05:50 (about 4 hours 20 minutes of work).
+
+Found 3 bugs, fixed 3. Nothing was left in the "not fixed" state and no fix needed a revert.
+
+The three that matter most:
+
+1. **Item clicks could disconnect modern clients (2168 / 2169).** When a client bundled a stack request in its auth input, the decoder crashed on the request's action list. Every click that carried an action was dropped with a decode error. Clients now get their inventory actions through normally.
+2. **1.16.100 players never saw other players' block changes (419).** Modern servers send them in a packet that version does not have, so the adapter threw the batch away. It is now rewritten into the per-block updates 1.16 understands.
+3. **Some skins broke the connection (419 / 475 / 486).** A player or NPC without a skin colour was written as an empty string that the reader then rejected. The reader now accepts it, so those players stay connected.
+
+Blocked or unverified: the 2168 `SetScore` variant that depends on the login GameVersion cannot be exercised without a real connection object, and no third-party client library (PrismarineJS or similar) was available here, so no independent replay was done. See the "Blocked or skipped" list.
+
+Pushed: everything is on `origin/overnight-fixes` (8 commits). Nothing was pushed late and nothing failed to push.
+
+Checks at the end: `go build ./...`, `go vet ./...`, `go test ./...` and `go test -race ./...` all pass with `GOFLAGS="-tags="`; `git diff --check` is clean. Both fuzz targets ran fixed 45 s and 90 s cycles with no crashes after the stack-request fix, and `TestEveryNativeBlockResolves` covers all 23958 native blocks on all 16 protocols.
+
+Still needs a real client: skin rendering for empty-skin players, sub-chunk block changes applying without a chunk reload, and everything in `docs/real-client-testing.md`.
+| Status |
 |---|------------|--------------------------|--------------|------------|--------|
 | 1 | 419, 475, 486 | A skin with no colour could not be decoded, so the adapters failed to read their own PlayerSkin/PlayerList output | The reader rejected an empty colour string while the writer emits exactly that for an empty skin | `fix: accept an empty legacy skin colour` | fixed |
 | 2 | 419 | Block changes sent as UpdateSubChunkBlocks never reached a 1.16.100 client | Protocol 419 has no sub-chunk batch packet; the batch was silently dropped | `fix: expand sub-chunk block batches for protocol 419` | fixed |
