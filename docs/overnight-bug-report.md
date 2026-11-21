@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 03:25
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 03:40
 Found: 2   Fixed: 2   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 | # | Version(s) | What went wrong (1 line) | Why (1 line) | Fix commit | Status |

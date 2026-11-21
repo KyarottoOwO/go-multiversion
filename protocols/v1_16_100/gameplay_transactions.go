@@ -100,6 +100,39 @@ func mapPlayerAuthInput(pk *packet.PlayerAuthInput, items *mapping.ItemMapper, b
 	return &cloned, true
 }
 
+// targetBlockChanges rewrites an UpdateSubChunkBlocks batch as the individual
+// UpdateBlock packets protocol 419 uses. Entries in Extra belong to the second
+// layer; entries carrying a synced transition keep their entity and transition
+// data through UpdateBlockSynced, which protocol 419 also supports.
+func targetBlockChanges(pk *packet.UpdateSubChunkBlocks, blocks *mapping.BlockMapper) []packet.Packet {
+	packets := make([]packet.Packet, 0, len(pk.Blocks)+len(pk.Extra))
+	appendLayer := func(entries []protocol.BlockChangeEntry, layer uint32) {
+		for _, entry := range entries {
+			runtimeID, _ := blocks.NativeToTarget(entry.BlockRuntimeID)
+			if entry.SyncedUpdateEntityUniqueID != 0 || entry.SyncedUpdateType != 0 {
+				packets = append(packets, &packet.UpdateBlockSynced{
+					Position:          entry.BlockPos,
+					NewBlockRuntimeID: runtimeID,
+					Flags:             entry.Flags,
+					Layer:             layer,
+					EntityUniqueID:    entry.SyncedUpdateEntityUniqueID,
+					TransitionType:    uint64(entry.SyncedUpdateType),
+				})
+				continue
+			}
+			packets = append(packets, &packet.UpdateBlock{
+				Position:          entry.BlockPos,
+				NewBlockRuntimeID: runtimeID,
+				Flags:             entry.Flags,
+				Layer:             layer,
+			})
+		}
+	}
+	appendLayer(pk.Blocks, 0)
+	appendLayer(pk.Extra, 1)
+	return packets
+}
+
 func mapBlockChangeEntries(entries []protocol.BlockChangeEntry, blocks *mapping.BlockMapper, direction mappingDirection) []protocol.BlockChangeEntry {
 	mapped := append([]protocol.BlockChangeEntry(nil), entries...)
 	for index := range mapped {

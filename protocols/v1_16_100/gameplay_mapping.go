@@ -149,10 +149,11 @@ func (p Protocol) convertGameplayFromLatest(pk packet.Packet, conn *minecraft.Co
 		cloned.NewBlockRuntimeID, _ = p.runtime.blocks.NativeToTarget(current.NewBlockRuntimeID)
 		return []packet.Packet{&cloned}
 	case *packet.UpdateSubChunkBlocks:
-		cloned := *current
-		cloned.Blocks = mapBlockChangeEntries(current.Blocks, p.runtime.blocks, toTarget)
-		cloned.Extra = mapBlockChangeEntries(current.Extra, p.runtime.blocks, toTarget)
-		return []packet.Packet{&cloned}
+		// Mojang's "SubChunk request system" guide dates the sub-chunk batch
+		// packets to 1.18.00. A 1.16.100 client has no UpdateSubChunkBlocks in
+		// its pool (the protocol-419 table ends at packet 162), so expand the
+		// batch into the per-block updates it does understand.
+		return targetBlockChanges(current, p.runtime.blocks)
 	case *packet.LevelSoundEvent:
 		if door := packetconv.LegacyDoorSound(current); door != nil {
 			return []packet.Packet{door}
