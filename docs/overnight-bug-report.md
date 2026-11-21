@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:00
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:15
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 | # | Version(s) | What went wrong (1 line) | Why (1 line) | Fix commit | Status |
@@ -57,7 +57,7 @@ Two documented exceptions live in the harness: `ItemRegistry` is clientbound-onl
 
 - **Protocol 2168 `SetScore` GameVersion-dependent layout**: cannot be exercised without a real `*minecraft.Conn` (its client data is not constructible from tests). Marked unverified.
 - **PrismarineJS bedrock-protocol replay**: not available in this environment, so no independent third-party client library check was performed.
-- **Real Mojang clients**: cannot be run here; see `docs/real-client-testing.md`.
+- **Real Mojang clients**: cannot be run here; `docs/real-client-testing.md` lists the per-version checklist, platforms and bug template.
 - **Fuzzing**: `FuzzAdapterDecode` and `FuzzConversionRoundTrip` ran 45 s and 90 s cycles with `-parallel=2` and no crashes after the fix. With default parallelism (20 workers) this machine runs out of memory while fuzzing, which shows up as a hung worker rather than a library bug.
 
 ## Still needs a real client
