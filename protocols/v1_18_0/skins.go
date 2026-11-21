@@ -227,7 +227,10 @@ func legacyARGB(value color.RGBA) string {
 
 func parseLegacyColour(io *wireIO, value string) color.RGBA {
 	hex := strings.TrimPrefix(value, "#")
-	if hex == "0" {
+	if hex == "" || hex == "0" {
+		// marshalSkin writes an empty string for skins without a colour, so the
+		// reader must accept its own output. The newer adapters
+		// (v1_21_100 parseLegacyColour) already treat "" and "0" as zero.
 		return color.RGBA{}
 	}
 	parsed, err := strconv.ParseUint(hex, 16, 32)
