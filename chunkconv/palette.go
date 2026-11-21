@@ -107,7 +107,9 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 		inlineTable [inlinePaletteCount]uint32
 		values      = inlineTable[:0]
 		indices     map[uint32]uint32
-		identity    = true
+		// ordered records that every entry kept its position, so the cell
+		// indices need no rewriting at all.
+		ordered = true
 	)
 	if count > inlinePaletteCount {
 		// A large palette would grow the inline table several times before the
@@ -123,9 +125,6 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 		if !ok {
 			return fmt.Errorf("unknown palette ID %d", uint32(value))
 		}
-		if mapped != uint32(value) {
-			identity = false
-		}
 		index, found := uint32(0), false
 		if indices != nil {
 			index, found = indices[mapped]
@@ -137,8 +136,13 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 				}
 			}
 		}
-		if !found {
+		if found {
+			ordered = false
+		} else {
 			index = uint32(len(values))
+			if index != uint32(i) {
+				ordered = false
+			}
 			values = append(values, mapped)
 			switch {
 			case indices != nil:
@@ -161,10 +165,13 @@ func palette(r *bytes.Reader, w *bytes.Buffer, mapID Mapper, reuse bool) error {
 			break
 		}
 	}
-	// An identity remap that keeps the width changes no cell and no palette
-	// entry, so the bytes already read are the bytes to emit. Out-of-range cell
-	// indices must still be rejected exactly as the repacking path rejects them.
-	if identity && len(values) == int(count) && newBits == bits {
+	// A palette whose entries keep their positions needs no cell rewrite: only
+	// the palette values change. Chunk palettes list distinct blocks, each of
+	// which normally maps to a distinct target state, so this is the common path
+	// and it avoids rewriting 4096 indices per section. Out-of-range cell indices
+	// must still be rejected exactly as the repacking path rejects them; a full
+	// palette cannot contain one, because every cell is exactly bits wide.
+	if ordered && newBits == bits {
 		if bits != 0 && int(count) != 1<<uint(bits) {
 			if err := validatePaletteCells(words, bits, 0, uint32(len(remap))); err != nil {
 				return err

@@ -54,6 +54,56 @@ func TestIdentityFastPathStillRejectsBadIndex(t *testing.T) {
 	}
 }
 
+// TestOrderedRemapMatchesRepack pins the ordered-values fast path: palette
+// entries that keep their positions only rewrite their values, so the result
+// must equal the layout an independent fixture builds. Partial palettes (3, 5
+// and 6 bits) still validate every cell index on that path.
+func TestOrderedRemapMatchesRepack(t *testing.T) {
+	for _, test := range []struct {
+		entries int
+		bits    int
+	}{
+		{1, 0}, {2, 1}, {3, 2}, {7, 3}, {15, 4}, {31, 5}, {40, 6}, {200, 8}, {256, 8},
+	} {
+		values := make([]uint32, test.entries)
+		mapped := make([]uint32, test.entries)
+		for i := range values {
+			values[i] = uint32(500 + i)
+			mapped[i] = values[i] + 10000
+		}
+		source := append([]byte{9, 1, 0}, fixturePalette(test.bits, values)...)
+		before := bytes.Clone(source)
+		out, err := SubChunk(source, func(id uint32) (uint32, bool) { return id + 10000, true })
+		if err != nil {
+			t.Fatalf("%d entries at %d bits: %v", test.entries, test.bits, err)
+		}
+		want := append([]byte{9, 1, 0}, fixturePalette(test.bits, mapped)...)
+		if !bytes.Equal(out, want) {
+			t.Fatalf("%d entries at %d bits: ordered remap is not byte-identical\n got %x\nwant %x", test.entries, test.bits, out, want)
+		}
+		if !bytes.Equal(source, before) {
+			t.Fatal("source mutated")
+		}
+	}
+}
+
+// TestOrderedFastPathStillRejectsBadIndex proves the ordered-values path keeps
+// the out-of-range error for a partial palette, where cells can hold indices
+// beyond the palette length.
+func TestOrderedFastPathStillRejectsBadIndex(t *testing.T) {
+	values := make([]uint32, 7)
+	for i := range values {
+		values[i] = uint32(500 + i)
+	}
+	source := append([]byte{9, 1, 0}, fixturePalette(4, values)...)
+	// Overwrite the first palette word so cell 0 holds index 9, which a
+	// seven-entry palette cannot represent.
+	source[4], source[5], source[6], source[7] = 9, 0, 0, 0
+	if _, err := SubChunk(source, func(id uint32) (uint32, bool) { return id + 10000, true }); err == nil || !strings.Contains(err.Error(), "outside length") {
+		t.Fatalf("out-of-range index accepted on the ordered path: %v", err)
+	}
+}
+
 // TestPaletteLargerThanInlineTable exercises the map promotion used once a
 // palette holds more than inlinePaletteCount distinct values, in both mapping
 // directions.

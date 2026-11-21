@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 06:10
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 06:35
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 ## Morning summary
@@ -140,27 +140,31 @@ keep timer overhead out of the per-op figure; the `ns/op` column comes from `-be
 window at ~3 µs is 12,000 window updates per core-second, far above what one player triggers.
 The one-digit `ns/op` entries are pass-through paths that allocate only the result slice.
 
-### Chunk conversion (baseline before the palette fast path)
+### Chunk conversion (before → after)
 
-| Protocol | ns/chunk | allocs/chunk | B/chunk |
-|---|---|---|---|
-| 2168 | 234,354 | 101 | 158,604 |
-| 1001 | 230,099 | 101 | 158,604 |
-| 975 | 231,076 | 101 | 158,604 |
-| 944 | 230,024 | 101 | 158,604 |
-| 924 | 230,336 | 101 | 158,604 |
-| 898 | 275,698 | 101 | 158,604 |
-| 844 | 449,321 | 101 | 158,604 |
-| 827 | 458,885 | 101 | 158,604 |
-| 766 | 442,259 | 101 | 158,604 |
-| 748 | 451,947 | 101 | 158,604 |
-| 486 | 413,554 | 100 | 101,260 |
-| 475 | 445,039 | 100 | 101,260 |
-| 419 | 446,888 | 100 | 101,260 |
-| 2169 | 493,422 | 101 | 158,604 |
-| 2193 | 478,311 | 101 | 158,605 |
+| Protocol | Before | After | Change | allocs before → after |
+|---|---|---|---|---|
+| 2168 | 234,354 ns | 27,958 ns | −88.1% | 101 → 53 |
+| 1001 | 230,099 ns | 25,624 ns | −88.9% | 101 → 53 |
+| 975 | 231,076 ns | 31,241 ns | −86.5% | 101 → 53 |
+| 944 | 230,024 ns | 52,911 ns | −77.0% | 101 → 53 |
+| 924 | 230,336 ns | 40,786 ns | −82.3% | 101 → 53 |
+| 898 | 275,698 ns | 32,746 ns | −88.1% | 101 → 53 |
+| 844 | 449,321 ns | 37,124 ns | −91.7% | 101 → 53 |
+| 827 | 458,885 ns | 38,864 ns | −91.5% | 101 → 53 |
+| 766 | 442,259 ns | 34,392 ns | −92.2% | 101 → 53 |
+| 748 | 451,947 ns | 36,890 ns | −91.8% | 101 → 53 |
+| 486 | 413,554 ns | 17,832 ns | −95.7% | 100 → 52 |
+| 475 | 445,039 ns | 23,674 ns | −94.7% | 100 → 52 |
+| 419 | 446,888 ns | 18,612 ns | −95.8% | 100 → 52 |
+| 2169 | 493,422 ns | 43,409 ns | −91.2% | 101 → 53 |
+| 2193 | 478,311 ns | 38,911 ns | −91.9% | 101 → 53 |
 
-A whole 441-chunk view distance took 189–207 ms of conversion per joining player.
+Bytes allocated per chunk fell from 158,604 to 109,452 (101,260 → 52,108 for the older
+adapters). A whole 441-chunk view distance dropped from 189–207 ms of conversion per joining
+player to 8.3–25.8 ms; per protocol: 2168 15.5, 1001 25.8, 975 12.4, 944 21.9, 924 14.1,
+898 18.6, 844 12.5, 827 19.8, 766 13.0, 748 16.2, 486 8.3, 475 9.4, 419 12.4, 2169 14.6,
+2193 13.5 ms.
 
 ### Bytes and time per joining player (baseline)
 
@@ -266,15 +270,24 @@ use returns to its starting value after a forced GC, and no goroutines are left 
 | What | Before | After | Change |
 |---|---|---|---|
 | Clientbound conversion on 748/766/827/844 (`text`) | 30.0–33.6 µs | 0.25 µs measured / 128–148 ns/op bench | ≈99% lower |
+| Chunk conversion, one overworld chunk | 230–493 µs, 101 allocs, 158 KB/op | 17.8–52.9 µs, 52–53 allocs, 109 KB/op | 6–13× faster (−77% to −96%) |
+| 441-chunk view-distance area | 189–207 ms | 8.3–25.8 ms | 8–15× faster (−88% to −96%) |
 
-That fix caches the target packet-ID set instead of rebuilding the whole packet pool to answer
-“does this version have this packet?” once per relayed packet. The pool build allocated one
+The conversion fix caches the target packet-ID set instead of rebuilding the whole packet pool to
+answer “does this version have this packet?” once per relayed packet. The pool build allocated one
 constructor closure per entry, which is why every clientbound packet on those four versions cost
 more than 30 µs while the same packet cost 0.25 µs on 2168/2193.
 
+The chunk fix notices when a palette's entries keep their positions (the normal case: distinct
+blocks each map to a distinct target state) and then only rewrites the palette values instead of
+walking and repacking all 4096 cell indices. Width changes, duplicate mapped values and padded
+palettes still take the repacking path, and out-of-range indices are still rejected. The golden
+file and every existing chunk test produce the same bytes before and after.
+
 ### Chunk send pacing
 
-A join converts 441 chunks. Before the fast path that was 189–207 ms of CPU; after it, 8–26 ms.
+A join converts 441 chunks. Before the fast path that was 189–207 ms of CPU; after it, 8.3–25.8 ms.
+The remaining cost is a 25 KB output copy and palette parsing, not the per-cell repack.
 The library itself has no send loop, so chunk order and rate are chosen by the server (Dragonfly
 or the caller's proxy). No pacing code was added and default behaviour is unchanged. If a server
 writes all 441 payloads in one tick it still puts ~11 MB before compression on the wire, so the
