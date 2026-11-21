@@ -148,7 +148,7 @@ func (io *wireIO) ShapeData(value *protocol.ShapeData) {
 		marshalTextShape(io, text)
 		return
 	}
-	(*value).Marshal(io)
+	(*value).Marshal(io.directional())
 }
 
 func doubleOptionalFunc[T any](io *wireIO, value *protocol.Optional[T], marshal func(*T)) {

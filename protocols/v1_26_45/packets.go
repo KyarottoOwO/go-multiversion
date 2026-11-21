@@ -96,7 +96,10 @@ func marshalPlayerAuthInput(io *wireIO, raw packet.Packet) {
 	io.Vec3(&pk.Delta)
 	doubleOptionalFunc(io, &pk.ItemInteractionData, io.PlayerInventoryAction)
 	doubleOptionalFunc(io, &pk.ItemStackRequest, func(request *protocol.ItemStackRequest) {
-		request.Marshal(io)
+		// The native Marshal allocates slices through gophertunnel's sliceReader
+		// interface, which only the directional wrappers expose. Passing the bare
+		// wireIO made a non-empty request panic with an index out of range.
+		request.Marshal(io.directional())
 	})
 	doubleOptionalFunc(io, &pk.BlockActions, func(actions *[]protocol.PlayerBlockAction) {
 		protocol.Slice(io.directional(), actions)
