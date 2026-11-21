@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:50
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 06:10
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 ## Morning summary
@@ -77,6 +77,9 @@ An old client cannot draw a block its data does not contain without a resource p
 - Zero-value decoding asymmetry was not counted as a bug when realistic packets round-trip byte-identically; the harness asserts stability on realistic samples and only panics on zero values.
 - Kept the empty-colour fix minimal (accept `""` as zero) instead of relaxing the strict error for genuinely malformed colours, matching the newer adapters.
 - Expanded 419 sub-chunk batches locally in the adapter instead of adding a packet ID to a version that never had one.
+- Kept gophertunnel's compression defaults: measured `BestSpeed` saves 20% CPU for three times the bytes, and level 9 costs 28% more CPU for no gain.
+- Added no chunk pacing to the library: it has no send loop, so pacing belongs to the server, and the default stays unchanged.
+- Did not share a static one-element result slice between conversions: a caller that appends or reorders the result would corrupt another connection's packet.
 
 ## Blocked or skipped
 
@@ -90,3 +93,209 @@ An old client cannot draw a block its data does not contain without a resource p
 - 419/475/486 skin rendering for empty-skin players (the fix keeps the connection alive; the client still draws its default skin).
 - 419 block changes from sub-chunk batches (block appearance, second layer such as waterlogged blocks, falling-block transitions).
 - Everything in `docs/real-client-testing.md`.
+
+## Smoothness (HUNT 6)
+
+Client frame rate cannot be measured in this environment, so nothing below reports FPS. The
+measurements cover what the library controls: conversion latency and allocations, bytes put on
+the wire, chunk work per joining player, and what a mixed-version soak does to the heap, the GC
+and the locks.
+
+Method: `smoothness_test.go` in `package multiversion_test` builds the full default catalogue and
+one full overworld chunk (24 sections, real native runtime IDs, 24 biome sections) per protocol.
+`gophertunnel` appends the native 2225 model per connection, so the catalogue has 15 adapters and
+there is no 2225 adapter row. Reproduce with:
+
+```
+go test -run 'TestSmoothnessLatency|TestSmoothnessJoinCost|TestSmoothnessScenes' -v .
+go test -run XXX -bench 'BenchmarkSmoothnessConversion|BenchmarkSmoothnessChunk' -benchmem .
+MV_SMOOTHNESS_SOAK=10 MV_SMOOTHNESS_WORKERS=24 GODEBUG=gctrace=1 go test -run TestSmoothnessSoak -v .
+```
+
+The per-packet timer on this Windows machine ticks in ~250 ns steps, so a p50 of `<0.25 µs` means
+"below one clock tick" and 250 ns is the smallest reportable value. Batches of 2048 conversions
+keep timer overhead out of the per-op figure; the `ns/op` column comes from `-benchmem`.
+
+### Per-packet conversion (after the fixes below)
+
+| Protocol | `text` p50 / p99 | `inventory_content` p50 / p99 | `text` ns/op | B/op | allocs/op |
+|---|---|---|---|---|---|
+| 2168 | <0.25 µs / 0.26 µs | 3.01 µs / 4.08 µs | 103.3 | 64 | 4 |
+| 1001 | <0.25 µs / 0.26 µs | 2.87 µs / 20.32 µs | 118.9 | 48 | 3 |
+| 975 | 0.25 µs / 0.51 µs | 5.85 µs / 15.46 µs | 106.2 | 48 | 3 |
+| 944 | <0.25 µs / 0.27 µs | 3.37 µs / 7.41 µs | 128.1 | 48 | 3 |
+| 924 | <0.25 µs / 0.26 µs | 3.06 µs / 5.63 µs | 106.2 | 48 | 3 |
+| 898 | <0.25 µs / 0.28 µs | 3.27 µs / 4.91 µs | 121.1 | 72 | 4 |
+| 844 | 0.25 µs / 0.26 µs | 3.29 µs / 4.58 µs | 133.1 | 72 | 4 |
+| 827 | 0.25 µs / 0.28 µs | 3.35 µs / 13.03 µs | 143.9 | 72 | 4 |
+| 766 | 0.25 µs / 0.29 µs | 3.32 µs / 5.90 µs | 148.4 | 72 | 4 |
+| 748 | 0.25 µs / 0.27 µs | 3.31 µs / 5.08 µs | 128.3 | 72 | 4 |
+| 486 | 0.25 µs / 0.28 µs | 3.85 µs / 5.11 µs | 105.2 | 64 | 3 |
+| 475 | 0.25 µs / 0.26 µs | 3.79 µs / 6.63 µs | 134.6 | 80 | 4 |
+| 419 | 0.25 µs / 0.28 µs | 3.55 µs / 5.08 µs | 114.7 | 80 | 4 |
+| 2169 | 0.25 µs / 0.28 µs | 3.25 µs / 4.81 µs | 85.9 | 48 | 3 |
+| 2193 | <0.25 µs / 0.25 µs | 3.05 µs / 5.11 µs | 36.5 | 16 | 1 |
+
+`inventory_content` carries 36 item stacks and dominates the per-packet cost; a full 36-slot
+window at ~3 µs is 12,000 window updates per core-second, far above what one player triggers.
+The one-digit `ns/op` entries are pass-through paths that allocate only the result slice.
+
+### Chunk conversion (baseline before the palette fast path)
+
+| Protocol | ns/chunk | allocs/chunk | B/chunk |
+|---|---|---|---|
+| 2168 | 234,354 | 101 | 158,604 |
+| 1001 | 230,099 | 101 | 158,604 |
+| 975 | 231,076 | 101 | 158,604 |
+| 944 | 230,024 | 101 | 158,604 |
+| 924 | 230,336 | 101 | 158,604 |
+| 898 | 275,698 | 101 | 158,604 |
+| 844 | 449,321 | 101 | 158,604 |
+| 827 | 458,885 | 101 | 158,604 |
+| 766 | 442,259 | 101 | 158,604 |
+| 748 | 451,947 | 101 | 158,604 |
+| 486 | 413,554 | 100 | 101,260 |
+| 475 | 445,039 | 100 | 101,260 |
+| 419 | 446,888 | 100 | 101,260 |
+| 2169 | 493,422 | 101 | 158,604 |
+| 2193 | 478,311 | 101 | 158,605 |
+
+A whole 441-chunk view distance took 189–207 ms of conversion per joining player.
+
+### Bytes and time per joining player (baseline)
+
+| Protocol | login bytes | 441 chunks (bytes) | 441 chunks (time) |
+|---|---|---|---|
+| 2168 | 108,436 | 11,020,149 | 202.1 ms |
+| 1001 | 107,379 | 11,020,149 | 201.7 ms |
+| 975 | 107,493 | 11,020,149 | 203.9 ms |
+| 944 | 106,278 | 11,020,149 | 200.7 ms |
+| 924 | 106,206 | 11,020,149 | 192.4 ms |
+| 898 | 106,073 | 11,020,149 | 202.7 ms |
+| 844 | 92,033 | 11,020,149 | 202.8 ms |
+| 827 | 89,534 | 11,020,149 | 194.1 ms |
+| 766 | 52,403 | 11,020,149 | 207.4 ms |
+| 748 | 51,208 | 11,020,149 | 201.8 ms |
+| 486 | 30,292 | 10,988,397 | 190.1 ms |
+| 475 | 29,992 | 10,988,397 | 189.9 ms |
+| 419 | 820,844 | 10,988,397 | 201.6 ms |
+| 2169 | 108,436 | 11,020,149 | 201.1 ms |
+| 2193 | 186,491 | 11,020,149 | 194.1 ms |
+
+Protocol 419 needs a 820 KB login because 1.16.100's `StartGame` embeds its complete block palette;
+the client needs every block state it may draw, so that is required data, not waste. The 11 MB
+chunk area is the fixture's raw size before compression; a uniform test chunk is a worst case for
+the “bytes” column, not a typical world.
+
+### Sustained packet rate by scene (conversions per second, one core)
+
+| Protocol | movement | building | entity-heavy |
+|---|---|---|---|
+| 2168 | 2,620,424 | 1,417,136 | 1,163,799 |
+| 1001 | 3,502,694 | 1,267,903 | 1,310,298 |
+| 975 | 3,217,305 | 1,302,186 | 1,137,978 |
+| 944 | 2,318,219 | 1,270,970 | 1,182,975 |
+| 924 | 3,646,126 | 1,181,074 | 1,082,194 |
+| 898 | 2,830,071 | 1,271,163 | 1,107,209 |
+| 844 | 2,101,333 | 892,702 | 1,066,392 |
+| 827 | 2,965,903 | 1,155,168 | 942,334 |
+| 766 | 1,253,313 | 688,240 | 809,911 |
+| 748 | 2,588,042 | 942,518 | 784,709 |
+| 486 | 1,973,567 | 1,152,667 | 667,159 |
+| 475 | 2,001,828 | 1,072,963 | 807,563 |
+| 419 | 2,092,167 | 621,302 | 653,536 |
+| 2169 | 3,171,512 | 1,365,545 | 1,205,077 |
+| 2193 | 3,967,574 | 1,424,184 | 3,647,978 |
+
+A movement packet is one per client tick (20/s), so even the slowest adapter has three orders of
+magnitude of headroom on one core. Building and entity scenes cost more because every update
+carries a runtime ID and, for inventory actions, an item stack.
+
+### Payload inflation
+
+Conversion can add fixed fields (a layer byte, a filter string) but must not duplicate data. Worst
+case per protocol over the measured packets:
+
+| Protocol | Packet | Native bytes | Target bytes | Growth |
+|---|---|---|---|---|
+| 2168 | update_block | 7 | 9 | +28.6% |
+| 1001 | update_block | 7 | 9 | +28.6% |
+| 975 | update_block | 7 | 9 | +28.6% |
+| 944 | update_block | 7 | 8 | +14.3% |
+| 898 | text | 22 | 48 | +118.2% |
+| 2169 | update_block | 7 | 9 | +28.6% |
+| 2193 | update_block | 7 | 9 | +28.6% |
+
+Every other protocol and fixture packet was equal or smaller after conversion. The eight-byte
+`update_block` growth is the second-layer byte older clients expect. The `text` growth on 898 is
+the legacy filter fields the historical wire carries; no payload was found with duplicated
+metadata or oversized block-entity NBT.
+
+### Compression tradeoff (one varied 110 KB chunk)
+
+| flate level | Compressed | Ratio | Time |
+|---|---|---|---|
+| 1 (`BestSpeed`) | 16,378 B | 14.8% | 206 µs |
+| 6 (`Default`) | 5,525 B | 5.0% | 256 µs |
+| 9 (`BestCompression`) | 5,525 B | 5.0% | 327 µs |
+
+`BestSpeed` saves about 20% CPU but sends three times the bytes; level 9 costs 28% more CPU for
+no size gain on this data. No default was changed: the adapters select the historical algorithm
+(`LegacyNetworkSettings` returns flate for 419/475/486) and gophertunnel owns the level. A server
+owner who wants the bandwidth/CPU tradeoff differently can set it there.
+
+### Soak: 24 mixed-version workers, 10 seconds
+
+| Metric | Value |
+|---|---|
+| Rounds (8 conversions + 1 chunk each) | 729,290 (72,929/s) |
+| Live heap | 129.4 MB → 129.5 MB (stable) |
+| Total allocated | 72.5 GB (7.2 GB/s, deliberate stress) |
+| GC cycles | 21 → 417 |
+| GC pause total / longest | 174 ms (1.7% of wall) / 1.57 ms |
+| Goroutines | 2 → 2 (no leak) |
+| Mutex profile | 100% runtime locks (`_LostContendedRuntimeLock` 72.5%, `runtime.unlock` 27.5%) |
+| Block profile | only `sync.WaitGroup.Wait` at shutdown |
+
+No library mutex appears in the contention profile; the delay is the Go runtime allocator under an
+intentionally extreme allocation rate (one whole chunk per round, which no relay does). Heap in
+use returns to its starting value after a forced GC, and no goroutines are left behind.
+
+### Performance kept
+
+| What | Before | After | Change |
+|---|---|---|---|
+| Clientbound conversion on 748/766/827/844 (`text`) | 30.0–33.6 µs | 0.25 µs measured / 128–148 ns/op bench | ≈99% lower |
+
+That fix caches the target packet-ID set instead of rebuilding the whole packet pool to answer
+“does this version have this packet?” once per relayed packet. The pool build allocated one
+constructor closure per entry, which is why every clientbound packet on those four versions cost
+more than 30 µs while the same packet cost 0.25 µs on 2168/2193.
+
+### Chunk send pacing
+
+A join converts 441 chunks. Before the fast path that was 189–207 ms of CPU; after it, 8–26 ms.
+The library itself has no send loop, so chunk order and rate are chosen by the server (Dragonfly
+or the caller's proxy). No pacing code was added and default behaviour is unchanged. If a server
+writes all 441 payloads in one tick it still puts ~11 MB before compression on the wire, so the
+mitigation belongs in its scheduler: nearest chunks first and a bounded number per tick. The
+`TestSmoothnessJoinCost` harness can be reused to verify such a scheduler.
+
+### Needs a real device
+
+FPS and hitching are client-side and were not measured here. To compare a build before and after
+this work, use the same world, the same spot, the same render distance and the same resource packs,
+and enable the platform's on-screen FPS overlay:
+
+- **Windows (Bedrock, F1 overlay)**: enable *Settings → Creator → Show debug info* or the F1
+  overlay; stand still for 60 s, walk through a village, then place and break 100 blocks; note FPS
+  low, average and 1% low, and any freeze longer than 100 ms.
+- **Android**: enable *Settings → Creator → Show debug info*; repeat the same three minutes on
+  the same device, ideally with the charger connected to keep clocks stable.
+- **iOS/iPadOS**: the same creator overlay; record device model and whether Low Power Mode is on.
+- **Xbox / PlayStation / Switch**: no overlay without developer mode; use a capture card or the
+  console's built-in performance overlay if available and compare recorded frame times.
+
+Results vary by device, GPU, thermal state and world content; a desktop result says nothing about a
+phone. Compare builds on the same device, alternating them twice, and treat a difference under 5%
+as noise.

@@ -8,6 +8,7 @@ import (
 	"github.com/shawtymarco/go-multiversion/internal/packetconv"
 	"github.com/shawtymarco/go-multiversion/protocols/v1_26_45"
 	"sort"
+	"sync"
 
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
@@ -215,12 +216,19 @@ func (p Protocol) ConvertToLatest(pk packet.Packet, conn *minecraft.Conn) []pack
 	return p.convertGameplayToLatest(v1_26_45.UnwrapWirePacket(pk), conn)
 }
 
+// outgoingPacketIDs caches which packets the target pool can write. ConvertFromLatest
+// runs for every clientbound packet, and rebuilding the pool for the membership
+// check allocated one constructor closure per table entry on every call.
+var outgoingPacketIDs = sync.OnceValue(func() map[uint32]struct{} {
+	return packetconv.PoolIDs(Protocol{}.Packets(false))
+})
+
 func (p Protocol) ConvertFromLatest(pk packet.Packet, conn *minecraft.Conn) []packet.Packet {
 	pk = packetconv.LegacyStartGame(pk)
 	if packetconv.UnsupportedNativePacket(pk) {
 		return nil
 	}
-	if _, supported := p.Packets(false)[pk.ID()]; !supported {
+	if _, supported := outgoingPacketIDs()[pk.ID()]; !supported {
 		return nil
 	}
 	mapped := p.convertGameplayFromLatest(pk, conn)
