@@ -248,6 +248,12 @@ no size gain on this data. No default was changed: the adapters select the histo
 (`LegacyNetworkSettings` returns flate for 419/475/486) and gophertunnel owns the level. A server
 owner who wants the bandwidth/CPU tradeoff differently can set it there.
 
+Threshold: gophertunnel defaults to 256 bytes (`minecraft.ListenConfig.CompressionThreshold`). The
+movement, block and chat packets measured here are 7–48 bytes, so they skip flate entirely, while
+the 25 KB chunk payload always compresses. Raising the threshold would only delay the point where
+a ~3 KB inventory window starts saving bytes; lowering it would spend CPU on 9-byte updates. The
+default is left unchanged.
+
 ### Soak: 24 mixed-version workers, 10 seconds
 
 | Metric | Value |
