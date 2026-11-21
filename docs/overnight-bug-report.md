@@ -1,6 +1,6 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:15
+Started: 2026-11-21 01:30   Last updated: 2026-11-21 05:35
 Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
 
 | # | Version(s) | What went wrong (1 line) | Why (1 line) | Fix commit | Status |
@@ -44,6 +44,12 @@ Environment note: this machine sets `GOFLAGS=-tags=legacytransport` globally, wh
 Two fuzz targets cover the same surface: `FuzzAdapterDecode` feeds arbitrary bytes to every adapter decoder and `FuzzConversionRoundTrip` converts whatever decodes. Run them with a fixed budget, for example `go test ./internal/compat -run XXX -fuzz=FuzzConversionRoundTrip -fuzztime=10m -parallel=2`; the reduced parallelism keeps 20 fuzz workers from exhausting memory on this machine.
 
 Two documented exceptions live in the harness: `ItemRegistry` is clientbound-only, so adapters do not convert it back, and 419/486 deliberately drop `CraftingData` (their retail clients keep built-in recipes and crash on the current catalogue).
+
+## Missing-block fallback (Phase 4)
+
+Block mapping already resolves every native state in this order: exact name and states, same name with the closest states, curated substitutions (protocol 419 `MappingOptions.BlockSubstitutions`, empty by default), then a visible air-like placeholder. `TestEveryNativeBlockResolves` walks every native runtime ID for every protocol and fails if a block produces no packet, if two conversions of the same block differ, or if the target form does not come back to the same target bytes. Current fallback counts (native blocks without an exact target state): 419 13554, 486 11801, 748 5188, 1001 2080.
+
+An old client cannot draw a block its data does not contain without a resource pack; the fallback keeps the world solid and visible instead of sending an invalid runtime ID. Only the substitution table is experimental and it stays off unless a caller passes entries.
 
 ## Decisions I made without asking
 
