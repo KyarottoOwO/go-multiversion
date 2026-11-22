@@ -1,34 +1,72 @@
 # Overnight bug report
 
-Started: 2026-11-21 01:30   Last updated: 2026-11-21 06:35
-Found: 3   Fixed: 3   Could not reproduce: 0   Not fixed: 0   Blocked: 1
+Completed: 2026-11-22 12:45   Last updated: 2026-11-22 12:45
+Status: **INCOMPLETE** - one completion-gate item is unmet: no independent reviewer
+could be run in this runtime, so `docs/completion-review.md` is an adversarial
+self-review. Everything else in the gate passes.
+Found: 6   Fixed: 6   Could not reproduce: 0   Not fixed: 0   Blocked: 2
+(real Mojang clients, third-party client-library replay)
 
-## Morning summary
+## Completion run summary
 
-Finished: 2026-11-21 05:50 (about 4 hours 20 minutes of work).
+Six bugs were found and six fixed, each with its own failing test and its own
+commit on `origin/overnight-fixes`. Three of them came from the new deep-fuzz
+pass rather than from the hand-written samples.
 
-Found 3 bugs, fixed 3. Nothing was left in the "not fixed" state and no fix needed a revert.
+In plain language, the changes are:
+
+1. A client on 2168/2169 that clicked an item in its inventory no longer gets
+   disconnected; the stack request inside its auth input decodes.
+2. Players on 1.16.100 now see other players' block changes without reloading
+   the chunk, because the sub-chunk batch is rewritten into per-block updates.
+3. A player or NPC without a skin colour no longer breaks the connection on
+   419/475/486.
+4. Four separate "eight bytes ask for gigabytes" decoders are gone: oversized
+   wire slice lengths, texture-pack and player-list counts, and the legacy
+   entity metadata map are all checked before anything is allocated.
 
 The three that matter most:
 
-1. **Item clicks could disconnect modern clients (2168 / 2169).** When a client bundled a stack request in its auth input, the decoder crashed on the request's action list. Every click that carried an action was dropped with a decode error. Clients now get their inventory actions through normally.
-2. **1.16.100 players never saw other players' block changes (419).** Modern servers send them in a packet that version does not have, so the adapter threw the batch away. It is now rewritten into the per-block updates 1.16 understands.
-3. **Some skins broke the connection (419 / 475 / 486).** A player or NPC without a skin colour was written as an empty string that the reader then rejected. The reader now accepts it, so those players stay connected.
+1. **The legacy metadata map (419/475/486).** An eight-byte `SetActorData`
+   payload made the decoder size a map from the wire count. The 486 adapter
+   allocated 1.79 GB for that payload, and the 475 adapter grew the heap past
+   20 GB until the OS killed the fuzz worker - silently, with no Go panic and no
+   crasher file. `TestOversizedMetadataCountDoesNotAllocate` now proves the
+   decode stays under 32 MB and fails with the 1.79 GB figure if the guard is
+   removed.
+2. **Texture-pack and player-list counts.** A `ResourcePacksInfo` payload with a
+   texture-pack count of 0xffff exhausted 24 GB. The same pattern existed in
+   player lists, skins, command tables, block actions and recipe grids.
+3. **The 1.9 TB slice.** A 13-byte `SubChunk` packet asked for a 1.9 TB
+   allocation and killed the process with a fatal out-of-memory error instead of
+   reporting a protocol error.
 
-Blocked or unverified: the 2168 `SetScore` variant that depends on the login GameVersion cannot be exercised without a real connection object, and no third-party client library (PrismarineJS or similar) was available here, so no independent replay was done. See the "Blocked or skipped" list.
+Real-client work: still none. Nothing here was run against a Mojang client, and
+no third-party client library replay was possible; `docs/real-client-testing.md`
+carries the per-version checklist. The new loopback harness joins 13 advertised
+configurations through a real RakNet listener, which is a protocol-level check,
+not a client check.
 
-Pushed: everything is on `origin/overnight-fixes` (8 commits). Nothing was pushed late and nothing failed to push.
+What was actually run on the final tree: `go build ./...`, `go vet ./...`,
+`go test -p 1 ./...`, `go test -race -short -p 1 ./protocols/... ./internal/... .`,
+the five-minute four-worker `-race` soak, `MV_LOOPBACK=1 go test -run
+TestLoopbackJoin`, `git diff --check`, and `actionlint` on both workflows. Seven
+fuzz targets each finished three consecutive ten-minute cycles at
+`-parallel=1`, the resource limit for this machine.
 
-Checks at the end: `go build ./...`, `go vet ./...`, `go test ./...` and `go test -race ./...` all pass with `GOFLAGS="-tags="`; `git diff --check` is clean. Both fuzz targets ran fixed 45 s and 90 s cycles with no crashes after the stack-request fix, and `TestEveryNativeBlockResolves` covers all 23958 native blocks on all 16 protocols.
+Gate status: (a) every item done or blocked - met; (b) build, vet, test, race,
+diff and oracles - met; (c) three clean cycles per fuzz target - met; (d) an
+independent reviewer - **not met**, no reviewer agent exists in this runtime;
+(e) everything pushed and CI configuration validates - met.
 
-Still needs a real client: skin rendering for empty-skin players, sub-chunk block changes applying without a chunk reload, and everything in `docs/real-client-testing.md`.
-| Status |
-|---|------------|--------------------------|--------------|------------|--------|
+| # | Protocols | Symptom | Cause | Commit | Status |
+|---|-----------|---------|-------|--------|--------|
 | 1 | 419, 475, 486 | A skin with no colour could not be decoded, so the adapters failed to read their own PlayerSkin/PlayerList output | The reader rejected an empty colour string while the writer emits exactly that for an empty skin | `fix: accept an empty legacy skin colour` | fixed |
 | 2 | 419 | Block changes sent as UpdateSubChunkBlocks never reached a 1.16.100 client | Protocol 419 has no sub-chunk batch packet; the batch was silently dropped | `fix: expand sub-chunk block batches for protocol 419` | fixed |
 | 3 | 2168, 2169 | A PlayerAuthInput containing a stack request (any action or filter string) crashed the decoder | The nested native Marshal allocates slices through an interface only the directional wire readers expose | `fix: decode nested stack requests in PlayerAuthInput` | fixed |
 | 4 | every 1.18+ adapter | A 9-byte SubChunk packet asked for a 1.9 TB slice and killed the process with a fatal out-of-memory error instead of a protocol error | The adapter slice helpers allocated the raw wire count | `fix: reject oversized wire slice lengths before allocating` | fixed |
 | 5 | every adapter | A texture-pack count of 0xffff exhausted 24 GB; player list, skins, command tables, block actions and recipe grids had the same pattern | Raw `make([]T, wireCount)` outside the generic helpers | `fix: guard the remaining wire-supplied slice lengths` | fixed |
+| 6 | 419, 475, 486 | An 8-byte `SetActorData` payload allocated 1.79 GB on 486 and grew the 475 worker past 20 GB until the OS killed it, taking the fuzz run down with no crasher file | The legacy adapters sized the metadata map with the wire count before reading any entry | `fix: bound the legacy entity metadata map size` | fixed |
 
 ## Notes
 
@@ -43,6 +81,8 @@ Found by the new conversion fuzzer, not by the sample harness, so it is a good e
 4. **Oversized wire slice lengths (every 1.18+ adapter).** A 13-byte protocol-1001 `SubChunk` payload declared 0xffffffff entries. The decoder passed that straight to `make([]SubChunkEntry, count)`, so the runtime tried to reserve 1.9 TB and terminated the process with `fatal error: out of memory`; a connection can recover a panicked protocol error, but it cannot recover a fatal allocation. Every duplicated slice helper now calls gophertunnel's `FuncSliceOfLen`, which checks the declared length against the remaining payload before allocating. Found by `FuzzAdapterDecode`.
 
 5. **The same pattern outside the generic helpers (every adapter).** After the first fix the fuzzer found a second path: a `ResourcePacksInfo` texture-pack count of 0xffff grew the worker to 24 GB. Player lists, ability layers, skin animations and persona pieces, command enum indices and shaped-recipe grids all allocated a wire count directly. `packetio.CheckSliceLength` now applies gophertunnel's payload check and a 65536 element ceiling before each of those allocations. Found by the same fuzz target on its next run.
+
+6. **Entity metadata map sized from the wire count (419 / 475 / 486).** The legacy decoder read a metadata entry count and passed it straight to `make(protocol.EntityMetadata, count)`. An eight-byte `SetActorData` payload decoded to a count of about 800 million, so the runtime started building a map that large; the heap reached 21 GB and the OS killed the worker. That kind of death is silent: no Go panic, no crasher file, just the fuzzer's worker disappearing. A watchdog around the fuzz target captured the input, the count now goes through `packetio.CheckSliceLength` like the other wire lengths, and the input is both a regression case and the saved crasher `internal/compat/testdata/fuzz/FuzzNestedFields/5899d230f1353c18`. The 486 adapter had the same decoder; it allocated 1.79 GB from the same eight bytes, which `TestOversizedMetadataCountDoesNotAllocate` now pins to a 32 MB budget (commit `5858951`, crasher `set-actor-data-metadata-count-486`). Found by `FuzzNestedFields`.
 
 ## Baseline (Phase 1)
 
