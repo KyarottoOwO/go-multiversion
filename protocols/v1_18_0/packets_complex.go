@@ -4,6 +4,7 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 const legacyPlayerAuthInputFlagCount = 64
@@ -45,6 +46,8 @@ func marshalPlayerAuthInput(io *wireIO, raw packet.Packet) {
 		count := int32(len(value))
 		io.Varint32(&count)
 		if io.reading {
+			packetio.CheckSliceLength(io.directional(), uint32(count))
+			packetio.CheckSliceLength(io.directional(), uint32(count))
 			value = make([]protocol.PlayerBlockAction, count)
 		}
 		for index := range value {

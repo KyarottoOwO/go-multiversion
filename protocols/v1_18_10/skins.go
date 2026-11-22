@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 func marshalPlayerList(io *wireIO, raw packet.Packet) {
@@ -21,6 +22,8 @@ func marshalPlayerList(io *wireIO, raw packet.Packet) {
 	count := uint32(len(pk.Entries))
 	io.Varuint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		pk.Entries = make([]protocol.PlayerListEntry, count)
 	}
 	for index := range pk.Entries {

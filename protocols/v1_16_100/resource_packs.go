@@ -4,6 +4,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 func marshalResourcePacksInfo(io *wireIO, raw packet.Packet) {
@@ -19,6 +20,8 @@ func marshalResourcePacksInfo(io *wireIO, raw packet.Packet) {
 	count := uint16(len(pk.TexturePacks))
 	io.Uint16(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		pk.TexturePacks = make([]protocol.TexturePackInfo, count)
 	}
 	for index := range pk.TexturePacks {

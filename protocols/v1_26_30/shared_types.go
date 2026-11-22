@@ -169,6 +169,7 @@ func marshalAbilityData(io *wireIO, data *protocol.AbilityData) {
 	count := uint8(len(data.Layers))
 	io.Uint8(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		data.Layers = make([]protocol.AbilityLayer, count)
 	}
 	for i := range data.Layers {
@@ -256,6 +257,7 @@ func marshalSkinAnimations(io *wireIO, animations *[]protocol.SkinAnimation) {
 	count := uint32(len(*animations))
 	io.Uint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		*animations = make([]protocol.SkinAnimation, count)
 	}
 	for i := range *animations {
@@ -273,6 +275,7 @@ func marshalPersonaPieces(io *wireIO, pieces *[]protocol.PersonaPiece) {
 	count := uint32(len(*pieces))
 	io.Uint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		*pieces = make([]protocol.PersonaPiece, count)
 	}
 	for i := range *pieces {
@@ -303,6 +306,7 @@ func marshalPersonaTints(io *wireIO, tints *[]protocol.PersonaPieceTintColour) {
 	count := uint32(len(*tints))
 	io.Uint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		*tints = make([]protocol.PersonaPieceTintColour, count)
 	}
 	for i := range *tints {

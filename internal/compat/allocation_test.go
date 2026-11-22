@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sandertv/gophertunnel/minecraft"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -31,6 +32,36 @@ func TestOversizedWireLengthsRejected(t *testing.T) {
 			payload: []byte{1, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff},
 			targetID: func(p minecraft.Protocol) (uint32, bool) {
 				out := p.ConvertFromLatest(&packet.SubChunk{}, nil)
+				if len(out) == 0 {
+					return 0, false
+				}
+				return out[0].ID(), true
+			},
+		},
+		{
+			name:     "player_list",
+			listener: false,
+			// action byte (add) then a varuint32 entry count of 0xffffffff with
+			// no entries behind it.
+			payload: []byte{1, 0xff, 0xff, 0xff, 0xff, 0x0f},
+			targetID: func(p minecraft.Protocol) (uint32, bool) {
+				out := p.ConvertFromLatest(&packet.PlayerList{Entries: []protocol.PlayerListEntry{{
+					ActionType: protocol.PlayerListActionRemove,
+				}}}, nil)
+				if len(out) == 0 {
+					return 0, false
+				}
+				return out[0].ID(), true
+			},
+		},
+		{
+			name:     "resource_packs_info",
+			listener: false,
+			// required bool, has-scripts bool, zero behaviour packs, then a
+			// uint16 texture-pack count of 0xffff with no entries behind it.
+			payload: []byte{0, 0, 0, 0, 0xff, 0xff},
+			targetID: func(p minecraft.Protocol) (uint32, bool) {
+				out := p.ConvertFromLatest(&packet.ResourcePacksInfo{}, nil)
 				if len(out) == 0 {
 					return 0, false
 				}

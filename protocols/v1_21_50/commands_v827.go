@@ -5,6 +5,7 @@ import (
 
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 func marshalAvailableCommands827(io *wireIO, pk *packet.AvailableCommands) {
@@ -25,6 +26,7 @@ func marshalCommandEnum827(io *wireIO, value *protocol.CommandEnum, enumValueCou
 	count := uint32(len(value.ValueIndices))
 	io.Varuint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		value.ValueIndices = make([]uint32, count)
 	}
 	for index := range value.ValueIndices {
@@ -65,6 +67,7 @@ func marshalCommand827(raw protocol.IO, value *protocol.Command) {
 	count := uint32(len(value.ChainedSubcommandOffsets))
 	io.Varuint32(&count)
 	if io.reading {
+		packetio.CheckSliceLength(io.directional(), uint32(count))
 		value.ChainedSubcommandOffsets = make([]uint32, count)
 	}
 	for index := range value.ChainedSubcommandOffsets {

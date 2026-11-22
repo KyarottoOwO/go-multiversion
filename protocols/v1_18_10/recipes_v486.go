@@ -3,6 +3,7 @@ package v1_18_10
 import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 const (
@@ -101,6 +102,13 @@ func marshalShapedRecipeV486(io *wireIO, recipe *protocol.ShapedRecipe) {
 	io.Varint32(&recipe.Width)
 	io.Varint32(&recipe.Height)
 	if io.reading {
+		// The grid dimensions are wire values: a negative or oversized product
+		// would be an unbounded allocation if it were used as a slice length.
+		if recipe.Width < 0 || recipe.Height < 0 || uint64(recipe.Width)*uint64(recipe.Height) > packetio.MaxSliceElements {
+			io.InvalidValue(recipe.Width, "recipe dimensions", "shaped recipe grid is out of range")
+			return
+		}
+		packetio.CheckSliceLength(io.directional(), uint32(recipe.Width*recipe.Height))
 		recipe.Input = make([]protocol.ItemDescriptorCount, recipe.Width*recipe.Height)
 	}
 	for index := range recipe.Input {
