@@ -2,12 +2,51 @@ package compat
 
 import (
 	"bytes"
+	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
+
+// TestOversizedMetadataCountDoesNotAllocate checks what the panic assertion in
+// TestOversizedWireLengthsRejected cannot see: decoding a payload whose metadata
+// count is huge must not allocate from that count. The legacy decoders sized the
+// metadata map with the wire count, and the map directory for the eight-byte
+// payload below is about 800 MB, so the connection-level protocol error arrives
+// only after the process has already paid for the allocation.
+func TestOversizedMetadataCountDoesNotAllocate(t *testing.T) {
+	payload := []byte{0x30, 0x92, 0x92, 0x92, 0x92, 0x30, 0x30, 0x30}
+	const budget = 32 << 20
+	for _, p := range catalogue(t) {
+		out := p.ConvertFromLatest(&packet.SetActorData{
+			EntityRuntimeID: 1,
+			EntityMetadata:  protocol.EntityMetadata{protocol.EntityDataKeyFlags: int64(0)},
+		}, nil)
+		if len(out) == 0 {
+			continue
+		}
+		constructor, ok := p.Packets(false)[out[0].ID()]
+		if !ok {
+			continue
+		}
+		t.Run(fmt.Sprintf("protocol_%d", p.ID()), func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			func() {
+				defer func() { _ = recover() }()
+				constructor().Marshal(p.NewReader(bytes.NewReader(payload), 0, true))
+			}()
+			runtime.ReadMemStats(&after)
+			if grown := after.TotalAlloc - before.TotalAlloc; grown > budget {
+				t.Fatalf("protocol %d allocated %d bytes decoding a %d-byte payload", p.ID(), grown, len(payload))
+			}
+		})
+	}
+}
 
 // TestOversizedWireLengthsRejected proves that a wire-supplied element count is
 // checked before it is used as an allocation size. The SubChunk decoder used to
@@ -77,8 +116,11 @@ func TestOversizedWireLengthsRejected(t *testing.T) {
 			// count and the runtime grew the heap past 20 GB before the OS
 			// killed the worker.
 			payload: []byte{0x30, 0x92, 0x92, 0x92, 0x92, 0x30, 0x30, 0x30},
-			targetID: func(p minecraft.Protocol) (uint32, bool) {
-				out := p.ConvertFromLatest(&packet.SetActorData{EntityRuntimeID: 1}, nil)
+							targetID: func(p minecraft.Protocol) (uint32, bool) {
+				out := p.ConvertFromLatest(&packet.SetActorData{
+					EntityRuntimeID: 1,
+					EntityMetadata:  protocol.EntityMetadata{protocol.EntityDataKeyFlags: int64(0)},
+				}, nil)
 				if len(out) == 0 {
 					return 0, false
 				}
