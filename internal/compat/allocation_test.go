@@ -69,6 +69,23 @@ func TestOversizedWireLengthsRejected(t *testing.T) {
 			},
 		},
 		{
+			name:     "set_actor_data",
+			listener: false,
+			// entity runtime ID, then a varuint32 metadata count of about 800
+			// million with no entries behind it. This is the payload a fuzzer
+			// found for protocol 475: it sized the metadata map with the raw
+			// count and the runtime grew the heap past 20 GB before the OS
+			// killed the worker.
+			payload: []byte{0x30, 0x92, 0x92, 0x92, 0x92, 0x30, 0x30, 0x30},
+			targetID: func(p minecraft.Protocol) (uint32, bool) {
+				out := p.ConvertFromLatest(&packet.SetActorData{EntityRuntimeID: 1}, nil)
+				if len(out) == 0 {
+					return 0, false
+				}
+				return out[0].ID(), true
+			},
+		},
+		{
 			name:     "resource_pack_response",
 			listener: true,
 			// response byte, then a uint16 pack count of 0xffff with no strings

@@ -23,7 +23,6 @@ func marshalPlayerList(io *wireIO, raw packet.Packet) {
 	io.Varuint32(&count)
 	if io.reading {
 		packetio.CheckSliceLength(io.directional(), uint32(count))
-		packetio.CheckSliceLength(io.directional(), uint32(count))
 		pk.Entries = make([]protocol.PlayerListEntry, count)
 	}
 	for index := range pk.Entries {

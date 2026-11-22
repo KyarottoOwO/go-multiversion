@@ -8,6 +8,7 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
+	"github.com/shawtymarco/go-multiversion/internal/packetio"
 )
 
 func marshalAddPlayer(io *wireIO, raw packet.Packet) {
@@ -126,6 +127,11 @@ func marshalEntityMetadata(io *wireIO, metadata *protocol.EntityMetadata) {
 	if io.reading {
 		var count uint32
 		io.Varuint32(&count)
+		// The map is sized from the wire count, so the count has to be checked
+		// first: an unguarded make asked the runtime to build a map with the
+		// requested number of entries, and an 8-byte SetActorData payload grew
+		// the heap past 20 GB until the OS killed the process.
+		packetio.CheckSliceLength(io.directional(), count)
 		decoded := make(protocol.EntityMetadata, count)
 		for range count {
 			var key, kind uint32
