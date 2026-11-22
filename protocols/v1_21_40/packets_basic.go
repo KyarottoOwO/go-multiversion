@@ -354,10 +354,8 @@ func marshalTransfer(io *wireIO, raw packet.Packet) {
 func funcSliceUint16[T any](io *wireIO, values *[]T, marshal func(*T)) {
 	count := uint16(len(*values))
 	io.Uint16(&count)
-	if io.reading {
-		*values = make([]T, count)
-	}
-	for i := range *values {
-		marshal(&(*values)[i])
-	}
+	// FuncSliceOfLen rejects a wire length that exceeds the remaining payload, or
+	// gophertunnel's slice limit when limits are enabled, before it allocates. A raw
+	// make here let a 14-byte packet request a multi-terabyte allocation.
+	protocol.FuncSliceOfLen(io.directional(), uint32(count), values, marshal)
 }

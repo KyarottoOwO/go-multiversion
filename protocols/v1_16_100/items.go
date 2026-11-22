@@ -221,12 +221,11 @@ func marshalItemStringSlice(io *wireIO, values *[]string) {
 		io.InvalidValue(count, "item string count", "count must not be negative")
 		return
 	}
-	if io.reading {
-		*values = make([]string, count)
-	}
-	for index := range *values {
-		io.String(&(*values)[index])
-	}
+	// FuncSliceOfLen checks the length against the remaining payload before it
+	// allocates, so a hostile count cannot request an unbounded slice.
+	protocol.FuncSliceOfLen(io.directional(), uint32(count), values, func(value *string) {
+		io.String(value)
+	})
 }
 
 func marshalMaterialReducer(io *wireIO, reducer *protocol.MaterialReducer) {

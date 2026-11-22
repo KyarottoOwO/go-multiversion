@@ -121,12 +121,9 @@ func emptyLegacySkin(skin protocol.Skin) bool {
 func funcIOSliceUint32Length[T any](io *wireIO, values *[]T, marshal func(protocol.IO, *T)) {
 	count := uint32(len(*values))
 	io.Uint32(&count)
-	if io.reading {
-		*values = make([]T, count)
-	}
-	for index := range *values {
-		marshal(io.directional(), &(*values)[index])
-	}
+	// FuncIOSliceOfLen rejects a wire length that exceeds the remaining payload
+	// before it allocates, instead of trusting it as a slice size.
+	protocol.FuncIOSliceOfLen(io.directional(), count, values, marshal)
 }
 
 func marshalSkinAnimation(raw protocol.IO, animation *protocol.SkinAnimation) {

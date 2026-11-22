@@ -55,12 +55,11 @@ func marshalSubChunk(io *wireIO, raw packet.Packet) {
 	marshalLegacySubChunkPos(io, &pk.Position)
 	count := uint32(len(pk.SubChunkEntries))
 	io.Uint32(&count)
-	if io.reading {
-		pk.SubChunkEntries = make([]protocol.SubChunkEntry, count)
-	}
-	for index := range pk.SubChunkEntries {
-		marshalSubChunkEntry(io, &pk.SubChunkEntries[index], pk.CacheEnabled)
-	}
+	// FuncSliceOfLen checks the length against the remaining payload before it
+	// allocates: a raw make here let a 9-byte packet request terabytes.
+	protocol.FuncSliceOfLen(io.directional(), count, &pk.SubChunkEntries, func(entry *protocol.SubChunkEntry) {
+		marshalSubChunkEntry(io, entry, pk.CacheEnabled)
+	})
 }
 
 func marshalSubChunkEntry(io *wireIO, entry *protocol.SubChunkEntry, cacheEnabled bool) {

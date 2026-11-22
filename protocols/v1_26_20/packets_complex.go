@@ -348,10 +348,8 @@ func marshalLegacyInputFlags(io *wireIO, flags *protocol.InputFlags, size int) {
 func funcSliceUint32[T any](io *wireIO, values *[]T, marshal func(*T)) {
 	count := uint32(len(*values))
 	io.Uint32(&count)
-	if io.reading {
-		*values = make([]T, count)
-	}
-	for i := range *values {
-		marshal(&(*values)[i])
-	}
+	// FuncSliceOfLen rejects a wire length that exceeds the remaining payload, or
+	// gophertunnel's slice limit when limits are enabled, before it allocates. A raw
+	// make here let a 14-byte packet request a multi-terabyte allocation.
+	protocol.FuncSliceOfLen(io.directional(), uint32(count), values, marshal)
 }

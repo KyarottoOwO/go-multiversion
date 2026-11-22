@@ -155,14 +155,13 @@ func marshalStartGameItems(io *wireIO) {
 	}
 	count := uint32(len(items))
 	io.Varuint32(&count)
-	if io.reading {
-		items = make([]protocol.ItemEntry, count)
-	}
-	for index := range items {
-		io.String(&items[index].Name)
-		io.Int16(&items[index].RuntimeID)
-		io.Bool(&items[index].ComponentBased)
-	}
+	// FuncSliceOfLen rejects a wire length that exceeds the remaining payload
+	// before it allocates.
+	protocol.FuncSliceOfLen(io.directional(), count, &items, func(item *protocol.ItemEntry) {
+		io.String(&item.Name)
+		io.Int16(&item.RuntimeID)
+		io.Bool(&item.ComponentBased)
+	})
 }
 
 func marshalBiomeDefinitionList(io *wireIO, _ packet.Packet) {
@@ -185,13 +184,14 @@ func marshalCreativeContent(io *wireIO, raw packet.Packet) {
 	io.Varuint32(&count)
 	if io.reading {
 		pk.Groups = nil
-		pk.Items = make([]protocol.CreativeItem, count)
 	}
-	for index := range pk.Items {
-		io.Varuint32(&pk.Items[index].CreativeItemNetworkID)
-		io.Item(&pk.Items[index].Item)
+	// FuncSliceOfLen rejects a wire length that exceeds the remaining payload
+	// before it allocates.
+	protocol.FuncSliceOfLen(io.directional(), count, &pk.Items, func(item *protocol.CreativeItem) {
+		io.Varuint32(&item.CreativeItemNetworkID)
+		io.Item(&item.Item)
 		if io.reading {
-			pk.Items[index].GroupIndex = 0
+			item.GroupIndex = 0
 		}
-	}
+	})
 }
