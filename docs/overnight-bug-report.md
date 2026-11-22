@@ -27,6 +27,8 @@ Still needs a real client: skin rendering for empty-skin players, sub-chunk bloc
 | 1 | 419, 475, 486 | A skin with no colour could not be decoded, so the adapters failed to read their own PlayerSkin/PlayerList output | The reader rejected an empty colour string while the writer emits exactly that for an empty skin | `fix: accept an empty legacy skin colour` | fixed |
 | 2 | 419 | Block changes sent as UpdateSubChunkBlocks never reached a 1.16.100 client | Protocol 419 has no sub-chunk batch packet; the batch was silently dropped | `fix: expand sub-chunk block batches for protocol 419` | fixed |
 | 3 | 2168, 2169 | A PlayerAuthInput containing a stack request (any action or filter string) crashed the decoder | The nested native Marshal allocates slices through an interface only the directional wire readers expose | `fix: decode nested stack requests in PlayerAuthInput` | fixed |
+| 4 | every 1.18+ adapter | A 9-byte SubChunk packet asked for a 1.9 TB slice and killed the process with a fatal out-of-memory error instead of a protocol error | The adapter slice helpers allocated the raw wire count | `fix: reject oversized wire slice lengths before allocating` | fixed |
+| 5 | every adapter | A texture-pack count of 0xffff exhausted 24 GB; player list, skins, command tables, block actions and recipe grids had the same pattern | Raw `make([]T, wireCount)` outside the generic helpers | `fix: guard the remaining wire-supplied slice lengths` | fixed |
 
 ## Notes
 
@@ -37,6 +39,10 @@ Still needs a real client: skin rendering for empty-skin players, sub-chunk bloc
 3. **Nested stack request inside PlayerAuthInput (2168 / 2169).** When a modern client bundles an item stack request in its auth input (every action it performs, filters included), the target decoder panicked with "index out of range" because the nested native encoder was given the bare wire object, which hides the slice-allocation interface. The connection was dropped, so the click never applied. The nested encoder now receives the directional reader/writer, the same way the neighbouring block-action list already did.
 
 Found by the new conversion fuzzer, not by the sample harness, so it is a good example of why the fuzz targets exist.
+
+4. **Oversized wire slice lengths (every 1.18+ adapter).** A 13-byte protocol-1001 `SubChunk` payload declared 0xffffffff entries. The decoder passed that straight to `make([]SubChunkEntry, count)`, so the runtime tried to reserve 1.9 TB and terminated the process with `fatal error: out of memory`; a connection can recover a panicked protocol error, but it cannot recover a fatal allocation. Every duplicated slice helper now calls gophertunnel's `FuncSliceOfLen`, which checks the declared length against the remaining payload before allocating. Found by `FuzzAdapterDecode`.
+
+5. **The same pattern outside the generic helpers (every adapter).** After the first fix the fuzzer found a second path: a `ResourcePacksInfo` texture-pack count of 0xffff grew the worker to 24 GB. Player lists, ability layers, skin animations and persona pieces, command enum indices and shaped-recipe grids all allocated a wire count directly. `packetio.CheckSliceLength` now applies gophertunnel's payload check and a 65536 element ceiling before each of those allocations. Found by the same fuzz target on its next run.
 
 ## Baseline (Phase 1)
 

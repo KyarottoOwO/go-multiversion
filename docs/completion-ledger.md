@@ -32,18 +32,18 @@ not a defect, and is recorded in `AGENTS.md`.
 | L02 | Bug 1: legacy empty skin colour accepted (419/475/486) | done | commit `c576e1d`; adapter skin tests |
 | L03 | Bug 2: sub-chunk block batches expanded for 419 | done | commit `89bd30d`; protocol-419 expansion test |
 | L04 | Bug 3: nested stack requests decoded in PlayerAuthInput (2168/2169) | done | commit `f0a02d3`; `TestPlayerAuthInputUsesProtocol2169BaseLayout`, compat sweep |
-| L05 | Compat sweeps cover every advertised protocol | in-progress | `internal/compat` runs 15 adapters; native 2225 is gophertunnel itself and is not an adapter row. Needs an explicit native-coverage statement and count assertion |
+| L05 | Compat sweeps cover every advertised protocol | done | `internal/compat` runs the 15 adapter rows; protocol 2225 is gophertunnel's own native model, covered by its own pool and by `nativeUnwritable` in `sweep_test.go`. `go test ./internal/compat` passes (18.8 s, log `.fuzzlogs/fix2-test.log`) |
 | L06 | Both conversion directions tested for every packet that differs from native | in-progress | `TestSampleRoundTrip` covers 54 realistic native packets clientbound; serverbound relies on per-adapter wire fixtures. Needs an inventory of differing packets and a check that each has a test |
-| L07 | Every nested Marshal/Unmarshal uses the directional reader/writer | in-progress | bug 3 fixed one instance (`protocols/v1_26_44`); the 419/475/486/1.21.x `items.go` nested NBT reader/writer and remaining `protocol.NewReader/NewWriter` call sites need auditing |
-| L08 | Every dropped or zeroed packet is justified from Mojang docs or implemented | in-progress | documented exceptions: 419 and 486 drop `CraftingData`; 944 rejects target-only `editor:map_marker_spawn_egg`. Needs a complete enumeration of conversion drops |
-| L09 | Legacy 419/475/486 parsers tolerate legal empty/optional values | in-progress | only the skin colour case is covered; needs an audit of string/optional/slice readers in those adapters |
-| L10 | Loopback harness runs at every protocol, including GameVersion variants in shared families (2168) | todo | `profile_join_test.go` is `mvprofile`-gated and only joins 2193. Needs a loopback that joins each protocol and both 2168 layouts |
+| L07 | Every nested Marshal/Unmarshal uses the directional reader/writer | done | audited every `protocol.NewReader/NewWriter` and nested `Marshal` call site: sub-buffers in `items.go` build their own reader from a length-prefixed byte slice (correct), and the remaining bare `Marshal(io)` calls (`placeInContainerAction`) contain primitives only. All nested types with slices go through `io.directional()` (`stack_requests.go`, `shared_types.go`, `packets_basic.go`, `packets_v827.go`) |
+| L08 | Every dropped or zeroed packet is justified from Mojang docs or implemented | done | drops are limited to: packet absent from the target pool (`outgoingPacketIDs` check in every 1.21+/1.26 adapter), `packetconv.UnsupportedNativePacket` (native-only IDs above the target era, plus boss events the target lacks), `legacyOnlyPacket766` in 748/766 (a 766-only packet), 419/486 `CraftingData` (built-in recipe clients), and the 944 target-only spawn egg; all are documented in the report's "Test matrix" and AGENTS.md |
+| L09 | Legacy 419/475/486 parsers tolerate legal empty/optional values | done | audited every `InvalidValue` in the three legacy adapters: empty skin colour, empty store-offer UUID and empty descriptor name are accepted; the remaining rejections are malformed UUIDs, unknown items/blocks, negative counts and a non-zero behaviour-pack count the server cannot represent |
+| L10 | Loopback harness runs at every protocol, including GameVersion variants in shared families (2168) | in-progress | `loopback_test.go` joins every advertised adapter through a real RakNet listener and dials 2168 twice (1.26.40 and 1.26.44); opt-in with `MV_LOOPBACK=1`; run pending after the fuzz sequence |
 | L11 | Fuzz target for chunk/palette decoding | todo | only `FuzzAdapterDecode`/`FuzzConversionRoundTrip` exist |
 | L12 | Fuzz target for login/negotiation | todo | same |
 | L13 | Fuzz target for batch/compression | todo | same |
 | L14 | Fuzz target for recipes/creative | todo | same |
 | L15 | Fuzz target for nested-field packets | todo | same |
-| L16 | Deep fuzz: 3 consecutive clean cycles per target, one target at a time | in-progress | first run found the L30 crash; cycles restart after `6303a27`. Resource limits reduce each cycle to 10 minutes at `-parallel=1` |
+| L16 | Deep fuzz: 3 consecutive clean cycles per target, one target at a time | in-progress | first run found L30 and L32; cycles restarted after `0bd2472`. 10 minutes per cycle at `-parallel=1`, log `.fuzzlogs/deep.log` |
 | L17 | Soak with many mixed-version clients clean under `-race` | todo | `TestSmoothnessSoak` is opt-in and not run under `-race` |
 | L18 | Benchmarks exist for every converter | in-progress | `BenchmarkSmoothnessConversion`/`BenchmarkSmoothnessChunk` cover every adapter and packet family; `chunkconv/bench_test.go` covers sub-chunk/level chunk. Needs an explicit per-converter check |
 | L19 | 2168 `SetScore` GameVersion-dependent layout exercised (was blocked) | in-progress | re-attempt: the seam `convertFromLatestForGameVersion` is unit-tested, and `ConvertFromLatest(..., nil)` covers the default; the `*minecraft.Conn` plumbing is the only uncovered line |
@@ -59,6 +59,7 @@ not a defect, and is recorded in `AGENTS.md`.
 | L29 | Everything pushed to `origin/overnight-fixes` | todo | pushes happen per fix; final confirmation pending |
 | L30 | Unbounded wire slice length caused a fatal 1.9 TB allocation (found by fuzzing) | done | commit `6303a27`; `TestOversizedWireLengthsRejected`; seed `internal/compat/testdata/fuzz/FuzzAdapterDecode/ec7faf06958d5620` reproduced `VirtualAlloc of 1954424520704 bytes failed` before the fix |
 | L31 | Audit every raw `make([]T, wireCount)` in the adapters | done | `6303a27`: 21 slice-helper files plus the 1.18.10 `chunks.go`, 3 `skins.go`, 419 `items.go` and the 419/475/486 StartGame lists now call `protocol.FuncSliceOfLen`; `grep -rn 'make(\[\]T, count)' protocols` returns 0 |
+| L32 | Second allocation class: texture pack / player list / skin / command counts (24 GB) | done | commit `0bd2472`; `packetio.CheckSliceLength` at every remaining site; `TestOversizedWireLengthsRejected` now covers SubChunk, PlayerList, ResourcePacksInfo and ResourcePackClientResponse |
 
 ## Decisions
 
