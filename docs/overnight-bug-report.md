@@ -68,6 +68,37 @@ independent reviewer - **not met**, no reviewer agent exists in this runtime;
 | 5 | every adapter | A texture-pack count of 0xffff exhausted 24 GB; player list, skins, command tables, block actions and recipe grids had the same pattern | Raw `make([]T, wireCount)` outside the generic helpers | `fix: guard the remaining wire-supplied slice lengths` | fixed |
 | 6 | 419, 475, 486 | An 8-byte `SetActorData` payload allocated 1.79 GB on 486 and grew the 475 worker past 20 GB until the OS killed it, taking the fuzz run down with no crasher file | The legacy adapters sized the metadata map with the wire count before reading any entry | `fix: bound the legacy entity metadata map size` | fixed |
 
+## Length guard: can it reject a legitimate payload?
+
+`packetio.CheckSliceLength` caps a wire count at 65,536 elements and also
+rejects a count larger than the remaining payload. The second test makes a
+false rejection impossible for any real list (an element is never smaller than
+one byte, so a legitimate count always fits), and the ceiling sits well above
+every field it guards:
+
+| Guarded field | Where | Largest a real server sends | Margin to 65,536 |
+|---|---|---|---|
+| entity metadata entries | 419/475/486 `entities.go` | under 200 (vanilla uses fewer than 100 keys) | 300x |
+| texture packs | 419/475/486 `resource_packs.go` | 64; the wire count is `uint16`, so 65,535 is the type maximum | 1,000x |
+| shaped recipe grid | 419/475/486 `recipes_v486.go` | 9 cells (3x3) | 7,000x |
+| player list entries | 419/475/486 `skins.go` | 100 on a large server | 650x |
+| ability layers | every modern `shared_types.go` | 3; the wire count is `uint8` | 21,000x |
+| skin animations | every modern `shared_types.go` | about 32 per skin | 2,000x |
+| persona pieces | every modern `shared_types.go` | 256 | 256x |
+| persona tints | every modern `shared_types.go` | about 32 | 2,000x |
+| command enum values | 827/844 families `commands_v*.go` | about 2,000 (the block value list) | 32x |
+| chained subcommand offsets | 827/844 families `commands_v*.go` | under 32 | 2,000x |
+
+No site needed a raised limit. `TestLargeLegalPayloadsDecode` (419),
+`TestLargeShapedRecipeGridDecodes` (486), `TestLargeCommandEnumDecodes` and
+`TestLargePersonaPieceListDecodes` (748) decode those maximum sizes through the
+guarded path and assert success. `TestCheckSliceLengthCallsAreReadGated` walks
+the tree with `go/ast` and fails if any of the 64 call sites is outside an
+`if io.reading` block; `CheckSliceLength` also returns immediately for
+`*protocol.Writer` now, which is a behaviour change only for the encode path,
+where the guard was never meant to apply. `TestCheckSliceLengthIgnoresWrites`
+and `TestCheckSliceLengthRejectsTruncatedRead` pin both directions.
+
 ## Missing-mapping fallbacks (audit)
 
 Every adapter funnels native identifiers through the two mappers in

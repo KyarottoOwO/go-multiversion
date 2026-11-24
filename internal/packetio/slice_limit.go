@@ -24,6 +24,16 @@ type sliceLimiter interface {
 // panicked protocol error, but allocating an attacker-controlled count first
 // kills the process with a fatal out-of-memory error instead.
 func CheckSliceLength(io protocol.IO, n uint32) {
+	if io == nil {
+		return
+	}
+	// A writer holds the slice it was handed, so it can never be rejected. That
+	// direction is not part of protocol.IO, so this short circuit only covers
+	// gophertunnel's writer; the source test in slice_limit_test.go keeps every
+	// call site read-gated as well.
+	if _, writing := io.(*protocol.Writer); writing {
+		return
+	}
 	if limiter, ok := io.(sliceLimiter); ok {
 		limiter.SliceLength(n, MaxSliceElements)
 		return
