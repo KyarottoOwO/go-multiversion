@@ -68,6 +68,33 @@ independent reviewer - **not met**, no reviewer agent exists in this runtime;
 | 5 | every adapter | A texture-pack count of 0xffff exhausted 24 GB; player list, skins, command tables, block actions and recipe grids had the same pattern | Raw `make([]T, wireCount)` outside the generic helpers | `fix: guard the remaining wire-supplied slice lengths` | fixed |
 | 6 | 419, 475, 486 | An 8-byte `SetActorData` payload allocated 1.79 GB on 486 and grew the 475 worker past 20 GB until the OS killed it, taking the fuzz run down with no crasher file | The legacy adapters sized the metadata map with the wire count before reading any entry | `fix: bound the legacy entity metadata map size` | fixed |
 
+## Missing-mapping fallbacks (audit)
+
+Every adapter funnels native identifiers through the two mappers in
+`mapping/`, so the audit is much smaller than the roughly 400 adapter call
+sites suggest: the report belongs in the mappers and every call site inherits
+it. `mapping.ReportFallback` writes one record per (protocol, kind, name) per
+process, at `slog` info level by default; `mapping.SetFallbackLogger` replaces
+the sink and a nil sink restores the default, so no adapter requires a logger.
+
+| Site | Fallback | Logged before this change? | Now |
+|------|----------|----------------------------|-----|
+| `BlockMapper.NativeToTarget` (82 adapter call sites) | historical air, or the opt-in substitution target | no | one record naming the protocol, the native block and the state used |
+| `BlockMapper.MapNative` (44 call sites) | the same, with `exact=false` | no | the same record; the rate limit is shared with the row above |
+| nil block mapper (an adapter with no registry configured) | runtime ID 0 | no | still unlogged: with no mapper there is no name, protocol or target to report |
+| `ItemMapper.NativeToTarget` (137 call sites) | none: the caller rejects the packet or item, no placeholder is substituted | no | one record per (protocol, item name) with `used=dropped` |
+| `ItemMapper.TargetToNative` | the caller rejects a target-only item serverbound | no | unchanged: a target-only item is not a native fallback |
+| `mapping.Biome419` | a stand-in from the same family, or plains for unknown IDs | yes, one `slog.Info` per distinct source ID | unchanged |
+| `mapping.Pre12650Biome` | total mapping (195 to 4, everything else unchanged) | n/a | n/a |
+| entity identifiers | no mapping table exists; entity type names pass through unchanged | n/a | n/a |
+
+Tests: `TestBlockMapperReportsFallbackOnce` (five hits, one record),
+`TestReportFallbackOncePerKey` (the rate-limit key), and
+`TestUnmappedSubChunkBlockStillSendsAndLogsOnce`, which sends three entries of a
+block the 419 palette cannot represent, asserts three `UpdateBlock` packets
+still reach the client with the air runtime ID, and asserts exactly one report
+for protocol 419.
+
 ## Notes
 
 1. **Empty legacy skin colour (419 / 475 / 486).** A player or NPC whose skin has no colour (NameTagOnly entries, servers that never set a skin) is written with an empty colour string. Reading that same value back raised "invalid value for skin colour" and the connection was dropped, so the adapter could not parse its own output. The reader now treats an empty string as the zero colour, exactly as the 1.21+ adapters already did for `""` and `"0"`.

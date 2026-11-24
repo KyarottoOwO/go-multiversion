@@ -45,31 +45,45 @@ type ItemMapper struct {
 	targetResolvedByWire map[string]string
 	targetEntries        []protocol.ItemEntry
 	fallbacks            []ItemFallback
+	protocol             int32
 	targetFallbacks      []TargetItemFallback
+}
+
+// ItemMapperOptions configures fallback reporting.
+type ItemMapperOptions struct {
+	// Protocol labels fallback reports with the target protocol ID.
+	Protocol int32
 }
 
 // NewItemMapper builds an immutable item mapping from the current ItemRegistry
 // packet and the historical identifier-keyed snapshot.
-func NewItemMapper(native []protocol.ItemEntry, target map[string]TargetItem) (*ItemMapper, error) {
-	return NewItemMapperWithResolver(native, target, func(name string) string { return name })
+func NewItemMapper(native []protocol.ItemEntry, target map[string]TargetItem, options ...ItemMapperOptions) (*ItemMapper, error) {
+	return NewItemMapperWithResolver(native, target, func(name string) string { return name }, options...)
 }
 
 // NewItemMapperWithResolver builds an immutable item mapping after resolving
 // historical target identifiers to their current semantic identifiers. The
 // original target identifiers remain unchanged in TargetEntries.
-func NewItemMapperWithResolver(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string) (*ItemMapper, error) {
-	return newItemMapperWithResolver(native, target, resolve, false)
+func NewItemMapperWithResolver(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string, options ...ItemMapperOptions) (*ItemMapper, error) {
+	return newItemMapperWithResolver(native, target, resolve, false, firstItemMapperOptions(options).Protocol)
 }
 
 // NewItemMapperAllowingTargetOnly builds a mapping that keeps historical
 // target-only entries in the advertised registry while rejecting them when
 // received serverbound. Use only when the exact target registry contains
 // removed or experimental items with no valid native semantic replacement.
-func NewItemMapperAllowingTargetOnly(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string) (*ItemMapper, error) {
-	return newItemMapperWithResolver(native, target, resolve, true)
+func NewItemMapperAllowingTargetOnly(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string, options ...ItemMapperOptions) (*ItemMapper, error) {
+	return newItemMapperWithResolver(native, target, resolve, true, firstItemMapperOptions(options).Protocol)
 }
 
-func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string, allowTargetOnly bool) (*ItemMapper, error) {
+func firstItemMapperOptions(options []ItemMapperOptions) ItemMapperOptions {
+	if len(options) == 0 {
+		return ItemMapperOptions{}
+	}
+	return options[0]
+}
+
+func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]TargetItem, resolve func(string) string, allowTargetOnly bool, protocolValue int32) (*ItemMapper, error) {
 	target, customNames, err := appendCustomItemDefinitions(native, target)
 	if err != nil {
 		return nil, err
@@ -182,6 +196,7 @@ func newItemMapperWithResolver(native []protocol.ItemEntry, target map[string]Ta
 		targetEntries:        targetEntries,
 		fallbacks:            fallbacks,
 		targetFallbacks:      targetFallbacks,
+		protocol:             protocolValue,
 	}, nil
 }
 
@@ -245,6 +260,13 @@ func (m *ItemMapper) NativeToTarget(runtimeID int32) (int32, bool) {
 		return 0, false
 	}
 	target, ok := m.nativeToTarget[runtimeID]
+	if !ok {
+		name := m.nativeNames[runtimeID]
+		if name == "" {
+			name = "unknown item runtime ID"
+		}
+		ReportFallback(Fallback{Protocol: m.protocol, Kind: "item", Name: name, Used: "dropped"})
+	}
 	return target, ok
 }
 

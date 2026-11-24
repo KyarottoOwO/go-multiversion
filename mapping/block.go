@@ -48,6 +48,9 @@ type BlockSubstitution struct {
 
 // BlockMapperOptions configures opt-in mapping behaviour.
 type BlockMapperOptions struct {
+	// Protocol labels fallback reports with the target protocol ID. Zero keeps
+	// the report unlabelled.
+	Protocol int32
 	// Substitutions are applied only to native states that have no exact target.
 	// Every target is resolved in the loaded historical palette. A missing
 	// target, or a missing CopyProperties value, leaves the air fallback.
@@ -64,6 +67,7 @@ type BlockMapper struct {
 	targetStates   []BlockState
 	targetByKey    map[string]uint32
 	fallbacks      []BlockFallback
+	protocol       int32
 	targetAir      uint32
 	substituted    int
 }
@@ -71,22 +75,29 @@ type BlockMapper struct {
 // NewBlockMapper builds an immutable direct mapping. Historical states are
 // ordered using the stable name-only FNV-1 sort used by recent Dragonfly block
 // registries before their runtime IDs are assigned.
-func NewBlockMapper(native BlockRegistry, historical []BlockState) (*BlockMapper, error) {
-	return newBlockMapper(native, historical, true, BlockMapperOptions{})
+func NewBlockMapper(native BlockRegistry, historical []BlockState, options ...BlockMapperOptions) (*BlockMapper, error) {
+	return newBlockMapper(native, historical, true, firstBlockMapperOptions(options))
 }
 
 // NewBlockMapperWithTargetOrder builds an immutable direct mapping while
 // preserving the input historical state order as the target runtime-ID order.
 // It is used by releases whose Dragonfly registry registered the embedded NBT
 // stream directly without a final sorting pass.
-func NewBlockMapperWithTargetOrder(native BlockRegistry, historical []BlockState) (*BlockMapper, error) {
-	return newBlockMapper(native, historical, false, BlockMapperOptions{})
+func NewBlockMapperWithTargetOrder(native BlockRegistry, historical []BlockState, options ...BlockMapperOptions) (*BlockMapper, error) {
+	return newBlockMapper(native, historical, false, firstBlockMapperOptions(options))
 }
 
 // NewBlockMapperWithTargetOrderAndOptions builds an order-preserving mapping
 // with opt-in substitutions for native states the target cannot represent.
 func NewBlockMapperWithTargetOrderAndOptions(native BlockRegistry, historical []BlockState, options BlockMapperOptions) (*BlockMapper, error) {
 	return newBlockMapper(native, historical, false, options)
+}
+
+func firstBlockMapperOptions(options []BlockMapperOptions) BlockMapperOptions {
+	if len(options) == 0 {
+		return BlockMapperOptions{}
+	}
+	return options[0]
 }
 
 func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bool, options BlockMapperOptions) (*BlockMapper, error) {
@@ -294,6 +305,7 @@ func newBlockMapper(native BlockRegistry, historical []BlockState, sortTarget bo
 		targetStates:   targetStates,
 		targetByKey:    targetByKey,
 		fallbacks:      fallbacks,
+		protocol:       options.Protocol,
 		targetAir:      targetAir,
 		substituted:    len(substituted),
 	}, nil
@@ -326,9 +338,14 @@ func (m *BlockMapper) NativeToTarget(runtimeID uint32) (target uint32, exact boo
 		if m == nil {
 			return 0, false
 		}
+		m.reportFallback(runtimeID, m.targetAir)
 		return m.targetAir, false
 	}
-	return m.nativeToTarget[runtimeID], m.nativeExact[runtimeID]
+	target, exact = m.nativeToTarget[runtimeID], m.nativeExact[runtimeID]
+	if !exact {
+		m.reportFallback(runtimeID, target)
+	}
+	return target, exact
 }
 
 // MapNative maps a current runtime ID and distinguishes an explicit fallback
@@ -337,7 +354,29 @@ func (m *BlockMapper) MapNative(runtimeID uint32) (target uint32, valid bool, ex
 	if m == nil || runtimeID >= uint32(len(m.nativeToTarget)) {
 		return 0, false, false
 	}
-	return m.nativeToTarget[runtimeID], true, m.nativeExact[runtimeID]
+	target, exact = m.nativeToTarget[runtimeID], m.nativeExact[runtimeID]
+	if !exact {
+		m.reportFallback(runtimeID, target)
+	}
+	return target, true, exact
+}
+
+// reportFallback records a missing target once per protocol and native block
+// name. Chunk streams repeat one state thousands of times, so the once-per-key
+// rate limit lives in ReportFallback instead of this hot path.
+func (m *BlockMapper) reportFallback(runtimeID, target uint32) {
+	if m == nil {
+		return
+	}
+	if runtimeID >= uint32(len(m.nativeStates)) {
+		ReportFallback(Fallback{Protocol: m.protocol, Kind: "block", Name: "out-of-range runtime ID", Used: "minecraft:air"})
+		return
+	}
+	used := "minecraft:air"
+	if target < uint32(len(m.targetStates)) {
+		used = m.targetStates[target].Name
+	}
+	ReportFallback(Fallback{Protocol: m.protocol, Kind: "block", Name: m.nativeStates[runtimeID].Name, Used: used})
 }
 
 // TargetToNative maps a protocol-1001 runtime ID to the exact current state.

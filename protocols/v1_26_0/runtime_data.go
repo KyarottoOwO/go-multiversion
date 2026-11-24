@@ -30,7 +30,7 @@ func newRuntimeData(native mapping.BlockRegistry, nativeItems []protocol.ItemEnt
 	for index, state := range historicalStates {
 		states[index] = mapping.BlockState{Name: state.Name, Properties: state.Properties, Version: state.Version}
 	}
-	blocks, err := mapping.NewBlockMapper(native, states)
+	blocks, err := mapping.NewBlockMapper(native, states, mapping.BlockMapperOptions{Protocol: ID})
 	if err != nil {
 		return nil, fmt.Errorf("build block mapping: %w", err)
 	}
@@ -82,7 +82,7 @@ func (data *runtimeData) itemMapper(native []protocol.ItemEntry) (*mapping.ItemM
 	if len(native) == 0 {
 		return nil, fmt.Errorf("native item registry is empty")
 	}
-	created, err := mapping.NewItemMapperAllowingTargetOnly(native, data.targetItems, resolveTargetItemName)
+	created, err := mapping.NewItemMapperAllowingTargetOnly(native, data.targetItems, resolveTargetItemName, mapping.ItemMapperOptions{Protocol: ID})
 	if err != nil {
 		return nil, err
 	}
