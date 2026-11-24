@@ -99,6 +99,31 @@ the tree with `go/ast` and fails if any of the 64 call sites is outside an
 where the guard was never meant to apply. `TestCheckSliceLengthIgnoresWrites`
 and `TestCheckSliceLengthRejectsTruncatedRead` pin both directions.
 
+## Length guard: second review of the diff
+
+Every hunk of `6303a27`, `0bd2472`, `6125cb3` and `5858951` was read again, 27
+files of mechanical change included. A script also flagged every
+`make([]T, count)` and `make(map[K]V, count)` in `protocols/` that does not sit
+within six lines of a guard; the three hits were all `len(existing slice)` on a
+native value or a write-side capacity, not a wire count.
+
+| Site | Check | Result |
+|---|---|---|
+| SubChunk entry lists, item-string lists, StartGame blocks/items, creative content (`FuncSliceOfLen`) | length compared with the remaining payload before `make` | pass; the element types are structs or strings, never zero-width |
+| `funcSliceUint16` / `funcSliceUint32` / `funcIOSliceUint32Length` | same helper; `uint16` count is widened to `uint32`, never narrowed | pass |
+| legacy metadata map (419/475/486) | `CheckSliceLength` before `make(map, count)` | pass; a map bucket is larger than one byte |
+| legacy player list (419/475/486) | guard before `make`, count is `varuint32` | pass |
+| legacy texture packs (419/475/486) | two guards, `uint16` wire count | pass; `uint16` cannot exceed the ceiling |
+| legacy shaped grid (419/475/486) | negative and `uint64` product checked against the ceiling, then the `uint32` cast | pass; the cast cannot wrap because the product was already bounded |
+| modern shaped grid (`recipes.go`, 9 adapters) | `uint32(Width*Height)` is computed before `FuncSliceOfLen` sees it | accepted, not changed: the truncated value is what both the payload check and the `make` use, so a wrapped product can only under-allocate (0 cells) and then fail while reading, never over-allocate and never reject a legitimate 3x3 |
+| modern ability layers, skin animations, persona pieces/tints, command enums and offsets | `CheckSliceLength` before `make`, all read-gated | pass |
+| modern metadata map | no count-sized allocation at all: entries are inserted into a map that grows with the bytes actually read | pass by construction; the `make([]int, 0, count)` in the same function is on the write path |
+
+Off-by-one: the comparison is `n > MaxSliceElements` in both the helper and
+gophertunnel's `SliceLength`, so a list of exactly 65,536 elements is accepted
+and 65,537 is rejected. No site fixes the ceiling locally; the table above shows
+the largest legitimate count is 2,000.
+
 ## Missing-mapping fallbacks (audit)
 
 Every adapter funnels native identifiers through the two mappers in
