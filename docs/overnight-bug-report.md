@@ -7,6 +7,23 @@ self-review. Everything else in the gate passes.
 Found: 6   Fixed: 6   Could not reproduce: 0   Not fixed: 0   Blocked: 2
 (real Mojang clients, third-party client-library replay)
 
+This review run, in six lines:
+
+1. Every unmapped block and item is now reported once per protocol and name
+   through `mapping.ReportFallback`, with an optional sink and a `slog` default;
+   the placeholder and the update-sending behaviour are unchanged.
+2. The 419 sub-chunk test now uses negative, far-from-origin coordinates and a
+   non-zero base, plus layers, synced entries, empty and 4096-entry batches.
+3. The guard's ten fields were tabulated (largest real count 2,000) and their
+   maximum sizes decode through it; an AST test keeps all 64 call sites
+   read-gated, and the helper now no-ops for writers - the only behaviour
+   change in this run.
+4. All guard hunks were re-read: every site checks before allocating, widens its
+   count and uses elements of at least one byte; the modern grid cast is
+   recorded as accepted.
+5. The report is 209 lines and keeps every figure and every ledger-cited heading.
+6. `docs/pr-description.md` and the three first real-client checks are written.
+
 Six bugs were found and six fixed, each with its own failing test and commit on
 `origin/overnight-fixes`. Three came from the new deep-fuzz pass rather than the
 hand-written samples. Real-client work: none - nothing here was run against a

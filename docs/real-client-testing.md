@@ -9,6 +9,29 @@ players.
 Every item below was **not** executed by automation. Where automation covers part
 of an item, it is named so a tester knows what is already known to be correct.
 
+## First three checks
+
+If you have one real client and twenty minutes, do these in order. Each targets
+something the automated suites cannot see.
+
+1. **1.16.100 block changes (protocol 419, `legacytransport` build).** Join with
+two clients, or one client plus a server console that places a block next to
+it. The block must appear without reloading the chunk. Check the second layer
+too, by placing water on a slab.
+2. **Terrain on any 1.26 client.** Join a world built by this branch and compare
+it with the same world on `main`: grass, dirt, stone, water, glass, stairs,
+slabs and a few plants. Colours, shapes and missing blocks are the palette fast
+path failing, and they show as wrong terrain rather than as a crash.
+3. **A player with no skin colour (1.16.100 - 1.18.12).** Join with an offline
+player whose skin has no colour, or look at an NPC with a NameTagOnly skin. The
+connection must stay up and the client must draw its default skin.
+
+If one fails, capture: the client version and platform (device, OS, build), the
+server commit and protocol, the exact sequence you performed, a screenshot, and
+the server log from the join. Grep the log for `cannot represent identifier`
+first - that line names the protocol, the native block or item, and what was
+substituted, and it is written once per name.
+
 ## Per-version checklist
 
 Run this list for every protocol you intend to ship:
